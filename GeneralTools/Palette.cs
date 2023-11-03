@@ -43,6 +43,10 @@ public struct Palette : IDisposable
 
     public static void GetPalettes()
     {
+        Context context = Context.GetContext();
+        
+        if (context.SavedPaletteDir == "") return;
+    
         foreach (Palette palette in Palettes)
         {
             Graphics.DeleteImGuiTexture(palette.DisplayTex);
@@ -50,7 +54,7 @@ public struct Palette : IDisposable
         
         Palettes.Clear();
 
-        foreach (string file in Directory.EnumerateFiles(Context.GetContext().SavedPaletteDir))
+        foreach (string file in Directory.EnumerateFiles(context.SavedPaletteDir))
         {
             if (Path.GetExtension(file) != ".png") continue;
             
