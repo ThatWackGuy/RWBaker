@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net70</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>false</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>RWBaker</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <AssemblyVersion>1.0.0</AssemblyVersion>
+        <ApplicationIcon>res/baker.ico</ApplicationIcon>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ImGui.NET" Version="1.89.7.1" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.0.2" />
+        <PackageReference Include="Veldrid" Version="4.9.0" />
+        <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
+        <PackageReference Include="Veldrid.SDL2" Version="4.9.0" />
+        <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
+        <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="res\fragment.spv" />
+        <EmbeddedResource Include="res\vertex.spv" />
+        <None Remove="shaders\fragment.spv" />
+        <None Remove="shaders\vertex.spv" />
+        <None Update="cimgui.dll">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="cimgui.dylib">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="cimgui.so">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Remove="shaders\tileVert.spv" />
+        <EmbeddedResource Include="res\tileVert.spv" />
+        <None Remove="shaders\tileFrag.spv" />
+        <EmbeddedResource Include="res\tileFrag.spv" />
+        <None Remove="shaders\palette0.png" />
+        <EmbeddedResource Include="res\palette0.png" />
+        <None Remove="res\rw-baker.png" />
+        <None Remove="res\testVert.spv" />
+        <None Remove="res\testFrag.spv" />
+        <None Remove="res\rwBgFrag.spv" />
+        <None Remove="res\rwShFrag.spv" />
+        <EmbeddedResource Include="res\rwShFrag.spv" />
+        <None Remove="res\rwShVert.spv" />
+        <EmbeddedResource Include="res\rwShVert.spv" />
+        <None Remove="res\bakertex.png" />
+        <EmbeddedResource Include="res\bakertex.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="res\baker.ico" />
+      <Resource Include="res\baker.ico" />
+    </ItemGroup>
+
+</Project>

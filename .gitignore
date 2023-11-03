@@ -1,0 +1,8 @@
+# :3
+.idea
+bin
+obj
+RWBaker.sln.DotSettings.user
+cimgui.dll
+cimgui.dylib
+cimgui.so

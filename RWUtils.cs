@@ -1,0 +1,257 @@
+using System;
+using System.IO;
+using System.Numerics;
+using System.Text.RegularExpressions;
+using RWBaker.GraphicsTools;
+using RWBaker.PropTools;
+using RWBaker.TileTools;
+using Veldrid;
+using Veldrid.SPIRV;
+
+namespace RWBaker;
+
+public static class RWUtils
+{
+    public static ResourceLayout RWObjectTextureLayout;
+
+    public static ShaderSetDescription RWShadowShaderSet;
+
+    public static ShaderSetDescription TileRendererShaderSet;
+    public static ResourceLayout RWObjectDataLayout;
+
+    public static VertexLayoutDescription[] RWVertexLayout;
+
+    public static void LoadGraphicsResources()
+    {
+        ResourceFactory factory = Graphics.ResourceFactory;
+        
+        RWVertexLayout = new VertexLayoutDescription[]
+        {
+            new(
+                new VertexElementDescription(
+                    "v_position",
+                    VertexElementSemantic.Position,
+                    VertexElementFormat.Float3
+                ), // 12 bytes
+                
+                new VertexElementDescription(
+                    "v_texCoord",
+                    VertexElementSemantic.TextureCoordinate,
+                    VertexElementFormat.Float2
+                ), // 8 bytes
+                
+                new VertexElementDescription(
+                    "v_color",
+                    VertexElementSemantic.Color,
+                    VertexElementFormat.Float4
+                ) // 16 bytes
+            )
+        };
+        // 36 bytes for each input
+        
+        RWObjectTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("PaletteTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadWrite, ShaderStages.Fragment)
+            )
+        );
+        
+        RWObjectDataLayout = factory.CreateResourceLayout(
+            new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("RenderData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)
+            )
+        );
+
+        // SHADOWS
+        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.rwShVert.spv"), "main");
+        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.rwShFrag.spv"), "main");
+        Shader[] shaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
+        
+        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shaders);
+        
+        // TILES
+        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.tileVert.spv"), "main");
+        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.tileFrag.spv"), "main");
+        Shader[] TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
+
+        TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, TileShaders);
+    }
+    
+    public static bool LingoBool(string line, out bool value)
+    {
+        if (int.TryParse(line, out int i))
+        {
+            value = i != 0;
+            return true;
+            
+        }
+
+        value = default;
+        return false;
+    }
+    
+    public static bool LingoInt(string line, out int value)
+    {
+        return int.TryParse(line, out value);
+    }
+    
+    public static bool LingoFloat(string line, out float value)
+    {
+        try
+        {
+            value = Convert.ToSingle(line);
+            return true;
+        }
+        catch (Exception)
+        {
+            value = default;
+            return false;
+        }
+    }
+    
+    public static bool LingoEnum<T>(string line, out T value) where T : struct
+    {
+        if (Enum.TryParse(line, true, out value)) return true;
+
+        value = default;
+        return false;
+    }
+    
+    public static bool LingoIntArray(string line, out int[] array)
+    {
+        string[] values = line.Replace(" ", "").Split(',');
+        
+        if (values[0] != "")
+        {
+            int layerL = values.Length;
+
+            array = new int[layerL];
+
+            for (int i = 0; i < layerL; i++)
+            {
+                array[i] = int.Parse(values[i]);
+            }
+
+            return true;
+        }
+
+        array = new[] { 0 };
+        return false;
+    }
+    
+    public static bool LingoIntArray(string[] values, out int[] array)
+    {
+        if (values[0] != "")
+        {
+            int layerL = values.Length;
+
+            array = new int[layerL];
+
+            for (int i = 0; i < layerL; i++)
+            {
+                array[i] = int.Parse(values[i]);
+            }
+
+            return true;
+        }
+
+        array = new[] { 0 };
+        return false;
+    }
+
+    public static void GetTiles(out string log)
+    {
+        Context context = Context.GetContext();
+        log = "";
+
+        if (!Directory.Exists(context.SavedGraphicsDir))
+        {
+            log = "GRAPHICS FOLDER DOES NOT EXIST!";
+            return;
+        }
+
+        if (!File.Exists(context.SavedGraphicsDir + "/init.txt"))
+        {
+            log = "GRAPHICS INIT DOES NOT EXIST!";
+            return;
+        }
+
+        string[] initLines = File.ReadAllLines(context.SavedGraphicsDir + "/init.txt");
+        
+        string lastCategory = "Uncategorized";
+        Vector3 lastColor = new(255, 255, 255);
+
+        foreach (string line in initLines)
+        {
+            // empty line or comment
+            if (Regex.IsMatch(line, "^\\s*$") || Regex.IsMatch(line, "^--\\w*\\n")) continue;
+            
+            // category definition
+            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
+            {
+                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
+                lastCategory = categoryInfo[1].Value;
+                string[] colorsNums = categoryInfo[2].Value.Replace(" ", "").Split(',');
+                lastColor.X = int.Parse(colorsNums[0]);
+                lastColor.Y = int.Parse(colorsNums[1]);
+                lastColor.Z = int.Parse(colorsNums[2]);
+                
+                continue;
+            }
+            
+            // tile definition
+            Tile tile = new(line, lastCategory, lastColor, ref log);
+            Program.Tiles.Add(tile);
+        }
+
+        if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
+    }
+    
+    public static void GetProps(out string log)
+    {
+        Context context = Context.GetContext();
+        log = "";
+
+        if (!Directory.Exists(context.SavedPropsDir))
+        {
+            log = "PROPS FOLDER DOES NOT EXIST!";
+            return;
+        }
+
+        if (!File.Exists(context.SavedPropsDir + "/init.txt"))
+        {
+            log = "PROPS INIT DOES NOT EXIST!";
+            return;
+        }
+
+        string[] initLines = File.ReadAllLines(context.SavedPropsDir + "/init.txt");
+        
+        string lastCategory = "Uncategorized";
+        Vector3 lastColor = new(255, 255, 255);
+
+        foreach (string line in initLines)
+        {
+            // empty line or comment
+            if (Regex.IsMatch(line, "^\\s*$") || Regex.IsMatch(line, "^--\\w*\\n")) continue;
+            
+            // category definition
+            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
+            {
+                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
+                lastCategory = categoryInfo[1].Value;
+                string[] colorsNums = categoryInfo[2].Value.Replace(" ", "").Split(',');
+                lastColor.X = int.Parse(colorsNums[0]);
+                lastColor.Y = int.Parse(colorsNums[1]);
+                lastColor.Z = int.Parse(colorsNums[2]);
+                
+                continue;
+            }
+            
+            // tile definition
+            Prop prop = new(line, lastCategory, lastColor, ref log);
+            Program.Props.Add(prop);
+        }
+
+        if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
+    }
+}
