@@ -197,9 +197,9 @@ public class RenderSingleTiles : Window
 
         ImGui.Separator();
 
-        ImGui.Image(render.Handle, render.Size * sizing, Vector2.Zero, Vector2.Zero, Vector4.One, rectOutlineCol);
+        ImGui.Image(render.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         ImGui.SameLine();
-        ImGui.Image(shadowRender.Handle, render.Size * sizing, Vector2.Zero, Vector2.Zero, Vector4.One, rectOutlineCol);
+        ImGui.Image(shadowRender.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
         ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
         

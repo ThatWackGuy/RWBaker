@@ -34,21 +34,6 @@ void main()
     {
         offset += 3;
     }*/
-
-    if ((d.texSize.x < 0 && d.texSize.y < 0) || (f_texCoord.x < 0 && f_texCoord.y < 0) || (f_texCoord.x > d.texSize.x && f_texCoord.y > d.texSize.y))
-    {
-        out_color = vec4(1, 0, 0, 1);
-        return;
-    }
-
-    if (f_texCoord == vec2(0, 0))
-    {
-        out_color = vec4(0, 1, 0, 1);
-        return;
-    }
-
-    out_color = vec4(1, 1, 0, 1);
-    return;
     
     vec4 pH = texture(pTex, vec2(f_layer, offset) / pSize);
     vec4 pB = texture(pTex, vec2(f_layer, offset + 1) / pSize);

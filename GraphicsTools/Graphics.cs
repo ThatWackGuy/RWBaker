@@ -101,7 +101,6 @@ public static class Graphics
     
     public static void CreateDeviceResources()
     {
-        
         vertexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(10000, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
         indexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(2000, BufferUsage.IndexBuffer | BufferUsage.Dynamic));
 
@@ -190,6 +189,8 @@ public static class Graphics
                 0,
                 0
             );
+            
+            handle.Dispose();
         }
     }
 

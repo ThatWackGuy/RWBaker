@@ -23,26 +23,32 @@ public struct RWVertexData
 
     public RWVertexData(Vector2 position)
     {
-        Position = new Vector3(position, 0.1f);
+        Position = new Vector3(position, 0);
         TexturePos = Vector2.Zero;
-        Color = RgbaFloat.Clear;
+        Color = RgbaFloat.Green;
     }
 
-    public static IEnumerable<RWVertexData> TestQuadVertices(float mult)
+    public static RWVertexData[] TestQuadVertices(float mult)
     {
-        yield return new RWVertexData(new Vector2(-1, +1) * mult);
-        yield return new RWVertexData(new Vector2(+1, +1) * mult);
-        yield return new RWVertexData(new Vector2(+1, -1) * mult);
-        yield return new RWVertexData(new Vector2(-1, -1) * mult);
+        return new[]
+        {
+            new RWVertexData(new Vector2(-1, +1) * mult),
+            new RWVertexData(new Vector2(+1, +1) * mult),
+            new RWVertexData(new Vector2(+1, -1) * mult),
+            new RWVertexData(new Vector2(-1, -1) * mult)
+        };
     }
     
-    public static IEnumerable<ushort> TestQuadIndices()
+    public static ushort[] TestQuadIndices()
     {
-        yield return 0;
-        yield return 1;
-        yield return 2;
-        yield return 2;
-        yield return 3;
-        yield return 0;
+        return new ushort[]
+        {
+            0,
+            1,
+            2,
+            2,
+            3,
+            0
+        };
     }
 }

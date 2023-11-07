@@ -331,8 +331,6 @@ public class Tile : RWObject, IRWRenderable
 
     public RWRenderDescription GetSceneInfo(RWScene scene)
     {
-        return Test(scene);
-        
         return Type switch
         {
             TileType.VoxelStruct or TileType.VoxelStructRockType or TileType.VoxelStructRandomDisplaceHorizontal or TileType.VoxelStructRandomDisplaceVertical => VoxelInfo(scene),
@@ -372,16 +370,6 @@ public class Tile : RWObject, IRWRenderable
         return true;
     }
 
-    private RWRenderDescription Test(RWScene scene)
-    {
-        return new RWRenderDescription(
-            RWVertexData.TestQuadVertices(0.3f).ToArray(),
-            RWVertexData.TestQuadIndices().ToArray(),
-            this,
-            scene
-        );
-    }
-
     private RWRenderDescription VoxelInfo(RWScene scene)
     {
         if (CachedTexture == null) throw new NullReferenceException("WHERES THE TILE TEXTURE");
@@ -402,7 +390,11 @@ public class Tile : RWObject, IRWRenderable
             
             for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
             {
-                int renderLayer = imgLayer + repeat;
+                // TODO: FIX REPEATS
+                // each layer need to be equally offset from other layers
+                // both shaders work on the assumption that tile layers do not repeat
+                // find a way to minimise data AND properly stack each layer
+                float renderLayer = imgLayer + repeat;
 
                 vertices[vertIndex] = new RWVertexData(
                     new Vector3(Vector2.Zero, renderLayer),

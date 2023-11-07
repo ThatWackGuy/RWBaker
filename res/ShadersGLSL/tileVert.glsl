@@ -18,8 +18,7 @@ layout(location = 1) out flat int f_layer;
 
 void main()
 {
-    //gl_Position = d.vTransform * vec4(v_position.xy + max(-d.vOffsetPerLayer.xy, 0.0) * (d.layerCount - 1) + d.vOffsetPerLayer.xy * v_position.z, v_position.z, 1);
-    gl_Position = vec4(v_position, 1);
+    gl_Position = d.vTransform * vec4(v_position.xy + max(-d.vOffsetPerLayer.xy, 0.0) * (d.layerCount - 1) + d.vOffsetPerLayer.xy * v_position.z, v_position.z, 1);
 
     f_texCoord = v_texCoord;
     f_layer = int(v_position.z);

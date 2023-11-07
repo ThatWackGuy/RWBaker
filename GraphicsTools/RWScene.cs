@@ -7,6 +7,7 @@ using RWBaker.GeneralTools;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
+using Veldrid.SPIRV;
 
 namespace RWBaker.GraphicsTools;
 
@@ -112,7 +113,8 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        
+        renderTarget.Name = "RWScene Render Texture";
+
         renderObjectStencil = factory.CreateTexture(
             new TextureDescription(
                 Width,
@@ -125,6 +127,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
+        renderObjectStencil.Name = "RWScene Object Depth Texture";
         
         renderTransferTexture = factory.CreateTexture(
             new TextureDescription(
@@ -138,6 +141,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
+        renderTransferTexture.Name = "RWScene Object Transfer Texture";
 
         #endregion
 
@@ -188,7 +192,10 @@ public class RWScene : IDisposable
     private void RecreatePipelines(ResourceFactory factory)
     {
         LitFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, renderTarget));
+        LitFramebuffer.Name = "LIT FRAMEBUFFER";
+        
         shadowFramebuffer  = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, renderShadowTarget));
+        shadowFramebuffer.Name = "SHADOW FRAMEBUFFER";
         
         ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
         shadowPipeline = factory.CreateGraphicsPipeline(
@@ -202,6 +209,7 @@ public class RWScene : IDisposable
                 shadowFramebuffer.OutputDescription
             )
         );
+        shadowPipeline.Name = "SHADOW FRAMEBUFFER";
         
         Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
@@ -291,6 +299,58 @@ public class RWScene : IDisposable
         commandList.CopyTexture(renderTarget, renderTransferTexture);
     }
     
+    // Does a completely detached render
+    private void TestRender()
+    {
+        ShaderDescription testV = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.testVert.glsl"), "main", true);
+        ShaderDescription testF = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.testFrag.glsl"), "main", true);
+        Shader[] shaders = graphicsDevice.ResourceFactory.CreateFromSpirv(testV, testF);
+        
+        Pipeline pipeline = Graphics.ResourceFactory.CreateGraphicsPipeline(
+            new GraphicsPipelineDescription(
+                BlendStateDescription.SingleAlphaBlend,
+                new DepthStencilStateDescription(true, true, ComparisonKind.Less),
+                new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Wireframe, FrontFace.Clockwise, false, false),
+                PrimitiveTopology.TriangleList,
+                new ShaderSetDescription(RWUtils.RWVertexLayout, shaders),
+                Array.Empty<ResourceLayout>(),
+                LitFramebuffer.OutputDescription
+            )
+        );
+        pipeline.Name = "TEST PIPELINE";
+        
+        DeviceBuffer VB = graphicsDevice.ResourceFactory.CreateBuffer(
+            new BufferDescription(
+                144, // 4 * 36
+                BufferUsage.VertexBuffer
+            )
+        );
+        VB.Name = "TEST VB";
+        graphicsDevice.UpdateBuffer(VB, 0, RWVertexData.TestQuadVertices(0.7f));
+
+        DeviceBuffer IB = graphicsDevice.ResourceFactory.CreateBuffer(
+            new BufferDescription(
+                12, // 6 * 2
+                BufferUsage.IndexBuffer
+            )
+        );
+        IB.Name = "TEST IB";
+        graphicsDevice.UpdateBuffer(IB, 0, RWVertexData.TestQuadIndices());
+        
+        commandList.SetFramebuffer(LitFramebuffer);
+        commandList.ClearColorTarget(0, RgbaFloat.Clear);
+        commandList.ClearDepthStencil(1, 0);
+        
+        commandList.SetPipeline(pipeline);
+        
+        commandList.SetVertexBuffer(0, VB);
+        commandList.SetIndexBuffer(IB, IndexFormat.UInt16);
+
+        commandList.DrawIndexed(6, 1, 0, 0, 0);
+        
+        commandList.CopyTexture(renderTarget, renderTransferTexture);
+    }
+    
     public void Render(bool forceUnlit)
     {
         vertexBuffer = graphicsDevice.ResourceFactory.CreateBuffer(
@@ -299,7 +359,7 @@ public class RWScene : IDisposable
                 BufferUsage.VertexBuffer
             )
         );
-            
+        
         indexBuffer = graphicsDevice.ResourceFactory.CreateBuffer(
             new BufferDescription(
                 (uint)renderItems.Select(r => r.Indices.Length).Sum() * 4,
@@ -308,7 +368,7 @@ public class RWScene : IDisposable
         );
 
         commandList.Begin();
-
+        
         MapShadows(forceUnlit);
         RenderObjects();
 

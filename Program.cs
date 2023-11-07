@@ -33,6 +33,9 @@ public static class Program
         
         Context.LoadContext();
         Context context = Context.GetContext();
+
+        // no.
+        if (context.WindowState == WindowState.Hidden) context.WindowState = WindowState.Normal;
         
         // Create window
         VeldridStartup.CreateWindowAndGraphicsDevice(
@@ -41,11 +44,11 @@ public static class Program
                 context.SavedWindowPos.Y,
                 context.SavedWindowSize.X,
                 context.SavedWindowSize.Y,
-                context.WindowState,
+                context.WindowState == WindowState.Minimized ? WindowState.Normal : context.WindowState,
                 "RWBaker"
             ),
             new GraphicsDeviceOptions(
-                false,
+                true,
                 null,
                 false,
                 ResourceBindingModel.Improved,
@@ -56,6 +59,11 @@ public static class Program
             out window,
             out GraphicsDevice graphics
         );
+
+        // with a minimised or hidden window at startup a swapchain cannot be created
+        // leading to vkAcquireNextImageKHR giving out an annoyingly vague memory exception
+        // this line, the state sterilisation and the ternary checks above make sure that never happens
+        if (context.WindowState == WindowState.Minimized) window.WindowState = WindowState.Minimized;
 
         CommandList = graphics.ResourceFactory.CreateCommandList();
         Graphics.Load(graphics, graphics.MainSwapchain.Framebuffer.OutputDescription, window);

@@ -52,6 +52,10 @@
         <EmbeddedResource Include="res\rwShVert.spv" />
         <None Remove="res\bakertex.png" />
         <EmbeddedResource Include="res\bakertex.png" />
+        <None Remove="res\testVert.glsl" />
+        <EmbeddedResource Include="res\testVert.glsl" />
+        <None Remove="res\testFrag.glsl" />
+        <EmbeddedResource Include="res\testFrag.glsl" />
     </ItemGroup>
 
     <ItemGroup>
