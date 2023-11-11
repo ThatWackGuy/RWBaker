@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_debug_printf : enable
 
 layout(set = 0, binding = 0, std140) uniform ShadowData
 {
@@ -16,7 +17,7 @@ layout(set = 1, binding = 2) uniform sampler2D sTex; // shadow depth map
 
 layout(location = 0) in vec2 f_texCoord;
 
-layout(location = 0) out float out_color;
+layout(location = 0) out vec4 out_color;
 
 void main()
 {    
@@ -28,5 +29,5 @@ void main()
         discard;
     }
     
-    out_color = gl_FragCoord.z;
+    out_color = vec4(gl_FragCoord.z, 0, 0, 1);
 }

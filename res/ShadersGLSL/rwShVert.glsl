@@ -15,12 +15,12 @@ layout(location = 2) in vec4 v_color;
 
 layout(location = 0) out vec2 f_texCoord;
 
-// this is same as tileVert.glsl
 void main()
 {
-    vec2 pos = v_position.xy + d.vLightOffset.xy * v_position.z;
-    vec2 offset = v_position.xy + max(-d.vObjectOffset.xy, 0.0) * (d.layerCount - 1);
-    gl_Position = d.vTransform * vec4(offset + pos, v_position.z, 1);
+    // v_position.xy + max(-d.vOffsetPerLayer.xy, 0.0) * (d.layerCount - 1) + d.vOffsetPerLayer.xy * v_position.z
+    vec2 offset = d.vLightOffset * (d.layerCount - 1) + d.vLightOffset * v_position.z;
+    vec2 firstLayerPos = max(-d.vObjectOffset, 0.0) * (d.layerCount - 1);
+    gl_Position = d.vTransform * vec4(v_position.xy + firstLayerPos + offset, v_position.z, 1);
 
     f_texCoord = v_texCoord;
 }

@@ -201,7 +201,7 @@ public class Tile : RWObject, IRWRenderable
 
         // TILE TYPE
         string typeStr = Regex.Match(line, "#tp *: *\"(.*?)\"").Groups[1].Value;
-        if (!RWUtils.LingoEnum(typeStr, out Type))
+        if (!RWUtils.LingoEnum(typeStr, TileType.VoxelStruct, out Type))
         {
             LogWarning($"Couldn't parse tile type '{typeStr}' on tile {Name}! Defaulting to VoxelStruct.", ref log);
         }
@@ -261,6 +261,7 @@ public class Tile : RWObject, IRWRenderable
         if (!RWUtils.LingoInt(rnd, out Variants))
         {
             LogWarning( $"Couldn't parse rnd on tile {Name}!", ref log);
+            Variants = 1;
         }
         
         // WHATEVER THIS IS
@@ -277,7 +278,7 @@ public class Tile : RWObject, IRWRenderable
         Tags = new TileTag[tagsList.Length];
         for (int i = 0; i < tagsList.Length; i++)
         {
-            if (!RWUtils.LingoEnum(tagsList[i].Replace(" ", ""), out TileTag tag))
+            if (!RWUtils.LingoEnum(tagsList[i].Replace(" ", ""), TileTag.None, out TileTag tag))
             {
                 LogWarning($"Couldn't parse tile tag '{tagsList[i]}' on tile {Name}!", ref log);
             }
@@ -363,7 +364,7 @@ public class Tile : RWObject, IRWRenderable
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture!,
                 Palette.Current.DisplayTex.VTex,
-                scene.RenderShadowStorage
+                scene.RenderShadowSampled
             )
         );
 
@@ -385,7 +386,7 @@ public class Tile : RWObject, IRWRenderable
             if (renderRepeatLayers[imgLayer] == 0) continue;
 
             // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer;
-            Vector2 texPos = new(PixelSize.X * renderVariation,  1 + imgLayer * PixelSize.Y);
+            Vector2 texPos = new(PixelSize.X * renderVariation,  imgLayer * PixelSize.Y);
             Vector2 texSize = (Vector2)PixelSize;
             
             for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
@@ -394,7 +395,7 @@ public class Tile : RWObject, IRWRenderable
                 // each layer need to be equally offset from other layers
                 // both shaders work on the assumption that tile layers do not repeat
                 // find a way to minimise data AND properly stack each layer
-                float renderLayer = imgLayer + repeat;
+                float renderLayer = 1 + imgLayer + repeat;
 
                 vertices[vertIndex] = new RWVertexData(
                     new Vector3(Vector2.Zero, renderLayer),

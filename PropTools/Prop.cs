@@ -127,7 +127,7 @@ public class Prop : RWObject
         
         // TYPE
         string typeStr = Regex.Match(line, "#tp *: *\"(.*?)\"").Groups[1].Value;
-        if (!RWUtils.LingoEnum(typeStr, out PropType type))
+        if (!RWUtils.LingoEnum(typeStr, PropType.Standard, out PropType type))
         {
             log += $"Couldn't parse prop type '{typeStr}' on prop {Name}! Defaulting to Standard.\n";
         }
@@ -148,7 +148,7 @@ public class Prop : RWObject
             Size = new Vector2Int(sizeX, sizeY);
 
             string colorTreatment = Regex.Match(line, "#colorTreatment *: *\"(.*?)\"").Groups[1].Value;
-            if (!RWUtils.LingoEnum(colorTreatment, out ColorTreatment))
+            if (!RWUtils.LingoEnum(colorTreatment, PropColorTreatment.Standard, out ColorTreatment))
             {
                 log +=
                     $"Couldn't parse prop color treatment '{colorTreatment}' on prop {Name}! Defaulting to Standard.\n";

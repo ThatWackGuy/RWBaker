@@ -25,8 +25,7 @@ public class RWScene : IDisposable
     private Texture renderObjectStencil;
     
     private Texture renderShadowTarget;
-    public Texture RenderShadowStorage;
-    public Texture RenderShadowStaging;
+    public Texture RenderShadowSampled;
 
     private readonly ResourceSet renderShadowDataSet;
     
@@ -154,34 +153,21 @@ public class RWScene : IDisposable
                 1,
                 1,
                 1,
-                PixelFormat.R8_UNorm,
+                PixelFormat.R8_G8_B8_A8_UNorm,
                 TextureUsage.RenderTarget,
                 TextureType.Texture2D
             )
         );
 
-        RenderShadowStorage = factory.CreateTexture(
+        RenderShadowSampled = factory.CreateTexture(
             new TextureDescription(
                 Width,
                 Height,
                 1,
                 1,
                 1,
-                PixelFormat.R8_UNorm,
-                TextureUsage.Storage,
-                TextureType.Texture2D
-            )
-        );
-        
-        RenderShadowStaging = factory.CreateTexture(
-            new TextureDescription(
-                Width,
-                Height,
-                1,
-                1,
-                1,
-                PixelFormat.R8_UNorm,
-                TextureUsage.Staging,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Sampled,
                 TextureType.Texture2D
             )
         );
@@ -251,7 +237,7 @@ public class RWScene : IDisposable
     private void MapShadows(bool forceUnlit)
     {
         commandList.SetFramebuffer(shadowFramebuffer);
-        commandList.ClearColorTarget(0, RgbaFloat.Clear);
+        commandList.ClearColorTarget(0, forceUnlit ? RgbaFloat.Black : RgbaFloat.Clear);
         commandList.ClearDepthStencil(forceUnlit ? 0 : 1, 0);
         
         foreach (RWRenderDescription desc in renderItems)
@@ -271,8 +257,7 @@ public class RWScene : IDisposable
             commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
         }
         
-        commandList.CopyTexture(renderShadowTarget, RenderShadowStorage);
-        commandList.CopyTexture(renderShadowTarget, RenderShadowStaging);
+        commandList.CopyTexture(renderShadowTarget, RenderShadowSampled);
     }
 
     private void RenderObjects()
@@ -405,42 +390,6 @@ public class RWScene : IDisposable
         
         // Read rendered texture
         MappedResource resource = graphicsDevice.Map(renderTransferTexture, MapMode.Read);
-        
-        // Upload to destination
-        graphicsDevice.UpdateTexture(
-            tex,
-            resource.Data,
-            resource.SizeInBytes,
-            0,
-            0,
-            0,
-            Width,
-            Height,
-            1,
-            0,
-            0
-        );
-
-        return tex;
-    }
-
-    public Texture GetShadowTexture()
-    {
-        Texture tex = Graphics.ResourceFactory.CreateTexture(
-            new TextureDescription(
-                Width,
-                Height,
-                1,
-                1,
-                1,
-                PixelFormat.R8_UNorm,
-                TextureUsage.Sampled,
-                TextureType.Texture2D
-            )
-        );
-        
-        // Read rendered texture
-        MappedResource resource = graphicsDevice.Map(RenderShadowStaging, MapMode.Read);
         
         // Upload to destination
         graphicsDevice.UpdateTexture(

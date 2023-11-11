@@ -52,7 +52,7 @@ public static class RWUtils
         RWObjectTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("PaletteTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadWrite, ShaderStages.Fragment)
+                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
             )
         );
         
@@ -109,11 +109,11 @@ public static class RWUtils
         }
     }
     
-    public static bool LingoEnum<T>(string line, out T value) where T : struct
+    public static bool LingoEnum<T>(string line, T defaultVal, out T value) where T : struct, Enum
     {
         if (Enum.TryParse(line, true, out value)) return true;
 
-        value = default;
+        value = defaultVal;
         return false;
     }
     

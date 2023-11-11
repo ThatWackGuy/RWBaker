@@ -5,6 +5,7 @@ layout(set = 0, binding = 0, std140) uniform RenderData
     mat4 vTransform;  // x+ right, y+ down matrix
     vec2 vOffsetPerLayer; // object offset
     vec2 texSize;
+    vec2 shTexSize;
     bool pRain;
     int layerCount;
 } d;
@@ -15,6 +16,7 @@ layout(set = 1, binding = 2) uniform sampler2D sTex; // shadow depth map
 
 layout(location = 0) in vec2 f_texCoord;
 layout(location = 1) flat in int f_layer;
+layout(location = 2) in float f_shLayer;
 
 layout(location = 0) out vec4 out_color;
 
@@ -30,10 +32,10 @@ void main()
     }
     
     // check if pixel is unlit
-    /*if (gl_FragCoord.z < texture(sTex, f_texCoord / d.texSize).r)
+    if (f_shLayer > texture(sTex, gl_FragCoord.xy / d.shTexSize).r)
     {
         offset += 3;
-    }*/
+    }
     
     vec4 pH = texture(pTex, vec2(f_layer, offset) / pSize);
     vec4 pB = texture(pTex, vec2(f_layer, offset + 1) / pSize);

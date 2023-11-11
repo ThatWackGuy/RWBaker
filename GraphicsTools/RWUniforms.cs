@@ -45,6 +45,7 @@ public struct RWTileRenderUniform
     public readonly Matrix4x4 Projection;
     public readonly Vector2 Offset;
     public readonly Vector2 TexSize;
+    public readonly Vector2 ShTexSize;
     public readonly bool UseRainPalette;
     public readonly int LayerCount;
 
@@ -53,6 +54,7 @@ public struct RWTileRenderUniform
         Projection = scene.Transform;
         Offset = scene.ObjectOffset;
         TexSize = tile.GetTextureSize();
+        ShTexSize = new Vector2(scene.Width, scene.Height);
         UseRainPalette = tile.UseRainPalette;
         LayerCount = tile.LayerCount();
     }

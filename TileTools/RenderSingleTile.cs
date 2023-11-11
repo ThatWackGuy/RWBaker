@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,8 @@ using System.Runtime.InteropServices;
 using ImGuiNET;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 
 namespace RWBaker.TileTools;
@@ -96,7 +99,7 @@ public class RenderSingleTiles : Window
             Marshal.Copy(mapped.Data, lastRenderBytes, 0, (int)mapped.SizeInBytes);
 
             Graphics.TryCreateImGuiTexture(tile.FullName, scene.GetTex(), out render);
-            Graphics.TryCreateImGuiTexture(tile.FullName + "_SH", scene.GetShadowTexture(), out shadowRender);
+            Graphics.TryCreateImGuiTexture(tile.FullName + "_SH", scene.RenderShadowSampled, out shadowRender);
         
             awaitUpdate = false;
 
@@ -150,6 +153,9 @@ public class RenderSingleTiles : Window
             ImGui.EndCombo();
         }
 
+        ImGui.Spacing();
+        ImGui.Spacing();
+        
         int vars = variation;
         if (tile.Variants > 1)
         {
@@ -167,13 +173,22 @@ public class RenderSingleTiles : Window
         int bg = background;
         ImGui.SliderInt("Background", ref background, 0, 2, bgName);
         
+        ImGui.Spacing();
+        ImGui.Spacing();
+        
         ImGui.SliderFloat("Layer Offset X", ref renderOffset.X, -50, 50);
         ImGui.SliderFloat("Layer Offset Y", ref renderOffset.Y, -50, 50);
+        if (ImGui.Button("Reset Layer Offset")) renderOffset = Vector2.Zero;
 
+        ImGui.Spacing();
         ImGui.Spacing();
         
         ImGui.SliderFloat("Light Offset X", ref lightOffset.X, -50, 50);
         ImGui.SliderFloat("Light Offset Y", ref lightOffset.Y, -50, 50);
+        if (ImGui.Button("Reset Light Offset")) lightOffset = Vector2.Zero;
+        
+        ImGui.Spacing();
+        ImGui.Spacing();
         
         if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) awaitUpdate = true;
         if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) awaitUpdate = true;
@@ -198,16 +213,16 @@ public class RenderSingleTiles : Window
         ImGui.Separator();
 
         ImGui.Image(render.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
-        ImGui.SameLine();
-        ImGui.Image(shadowRender.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.Image(shadowRender.Handle, shadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
         ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
         
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
-            FileStream stream = File.Create($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
-            stream.Write(lastRenderBytes);
+            Image<Rgba32> img = Image.LoadPixelData<Rgba32>(Configuration.Default, lastRenderBytes, (int)scene.Width, (int)scene.Height);
+            img.Save($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
+            img.Dispose();
         }
         
         ImGui.End();
