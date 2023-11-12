@@ -19,15 +19,16 @@ public struct Palette : IDisposable
 
     public string Name;
     public readonly Image<Rgba32> ColorsImage;
-    public readonly Tex2D DisplayTex;
+    public readonly GuiTexture DisplayTex;
     public readonly bool isMixed;
 
     public Palette(Image<Rgba32> image, string name)
     {
         Name = name;
         ColorsImage = image;
+
         Texture dTex = Graphics.TextureFromImage(image);
-        Graphics.TryCreateImGuiTexture(name, dTex, out DisplayTex);
+        DisplayTex = GuiTexture.Create(name, dTex);
         isMixed = false;
     }
     
@@ -37,7 +38,7 @@ public struct Palette : IDisposable
         ColorsImage = ImageUtils.ImageMix(palette1.ColorsImage, palette2.ColorsImage, new Vector2Int(32, 16), palette1Percent / 100f, palette2Percent / 100f);
         
         Texture dTex = Graphics.TextureFromImage(ColorsImage);
-        Graphics.TryCreateImGuiTexture(Name, dTex, out DisplayTex);
+        DisplayTex = GuiTexture.Create(Name, dTex);
         isMixed = true;
     }
 
@@ -49,7 +50,7 @@ public struct Palette : IDisposable
     
         foreach (Palette palette in Palettes)
         {
-            Graphics.DeleteImGuiTexture(palette.DisplayTex);
+            palette.DisplayTex.Dispose();
         }
         
         Palettes.Clear();
@@ -140,7 +141,7 @@ public struct Palette : IDisposable
         if (bPercent == 100) return palB;
         if (Current.Name == $"{aPercent} {palA.Name} + {bPercent} {palB.Name}") return Current;
 
-        if (Current.isMixed) Graphics.DeleteImGuiTexture(Current.DisplayTex);
+        if (Current.isMixed) Current.DisplayTex.Dispose();
 
         return new Palette(palA, aPercent, palB, bPercent);
     }

@@ -22,6 +22,7 @@ public static class Program
     public static readonly List<Window> Windows = new();
     public static readonly List<Window> WindowDelete = new();
     public static readonly List<Window> WindowAdd = new();
+    public static GuiTexture IconTexture;
     
     public static readonly List<Tile> Tiles = new();
     
@@ -70,7 +71,7 @@ public static class Program
         
         // Load Icon Texture
         Texture iconTex = Graphics.TextureFromResource("res.bakertex.png");
-        Graphics.TryCreateImGuiTexture("_icon", iconTex, out _);
+        IconTexture = GuiTexture.Create("_icon", iconTex);
         
         Palette.Load();
 

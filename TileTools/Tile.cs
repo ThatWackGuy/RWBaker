@@ -363,8 +363,8 @@ public class Tile : RWObject, IRWRenderable
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture!,
-                Palette.Current.DisplayTex.VTex,
-                scene.RenderShadowSampled
+                Palette.Current.DisplayTex.Texture,
+                scene.ShadowRenderTarget
             )
         );
 

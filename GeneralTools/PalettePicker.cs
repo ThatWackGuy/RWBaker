@@ -55,7 +55,7 @@ public class PalettePicker : Window
 
                 if (!ImGui.IsItemHovered()) continue;
                 if (!ImGui.BeginTooltip()) continue;
-                ImGui.Image(palette.DisplayTex.Handle, palette.DisplayTex.Size * 5);
+                ImGui.Image(palette.DisplayTex.Index, palette.DisplayTex.Size * 5);
                 ImGui.EndTooltip();
             }
             
@@ -65,7 +65,7 @@ public class PalettePicker : Window
         context.Palette1Percentage = 100 - context.Palette2Percentage;
         ImGui.SliderInt("Palette A Percentage", ref context.Palette1Percentage, 0, 100);
 
-        ImGui.Image(Palette.A.DisplayTex.Handle, Palette.A.DisplayTex.Size * paletteColorSize);
+        ImGui.Image(Palette.A.DisplayTex.Index, Palette.A.DisplayTex.Size * paletteColorSize);
         
         ImGui.Separator();
         
@@ -81,7 +81,7 @@ public class PalettePicker : Window
                 
                 if (!ImGui.IsItemHovered()) continue;
                 if (!ImGui.BeginTooltip()) continue;
-                ImGui.Image(palette.DisplayTex.Handle, palette.DisplayTex.Size * 5);
+                ImGui.Image(palette.DisplayTex.Index, palette.DisplayTex.Size * 5);
                 ImGui.EndTooltip();
             }
 
@@ -91,7 +91,7 @@ public class PalettePicker : Window
         context.Palette2Percentage = 100 - context.Palette1Percentage;
         ImGui.SliderInt("Palette B Percentage", ref context.Palette2Percentage, 0, 100);
 
-        ImGui.Image(Palette.B.DisplayTex.Handle, Palette.B.DisplayTex.Size * paletteColorSize);
+        ImGui.Image(Palette.B.DisplayTex.Index, Palette.B.DisplayTex.Size * paletteColorSize);
         
         ImGui.Separator();
 
@@ -117,7 +117,7 @@ public class PalettePicker : Window
         
         Utils.InfoMarker("Will be outputted to palette path\nIf image already exists it will be overriden");
 
-        ImGui.Image(Palette.Current.DisplayTex.Handle, Palette.Current.DisplayTex.Size * paletteColorSize);
+        ImGui.Image(Palette.Current.DisplayTex.Index, Palette.Current.DisplayTex.Size * paletteColorSize);
 
         ImGui.End();
     }

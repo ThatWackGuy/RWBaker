@@ -7,22 +7,16 @@ namespace RWBaker.GeneralTools;
 
 public class InfoWindow : Window
 {
-    private readonly IntPtr iconPointer;
-    private readonly Vector2 iconSize;
-    
     public InfoWindow() : base("RWBaker", "_RwBakerInfo")
     {
         Open = true;
-
-        iconPointer = Graphics.Textures["_icon"].Handle;
-        iconSize = new Vector2(128, 128);
     }
 
     protected override void Draw()
     {
         Begin(ImGuiWindowFlags.AlwaysAutoResize);
         
-        ImGui.Image(iconPointer, iconSize, Vector2.Zero, Vector2.One);
+        ImGui.Image(Program.IconTexture.Index, Program.IconTexture.Size, Vector2.Zero, Vector2.One);
         ImGui.Text("RWBaker 0.0.1");
         ImGui.Text("Made With:");
         

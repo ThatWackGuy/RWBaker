@@ -27,10 +27,10 @@ public class RenderSingleTiles : Window
     private Tile tile;
     private int variation;
     private int background;
-    private Tex2D render;
-    private Tex2D shadowRender;
+    private GuiTexture render;
+    private GuiTexture shadowRender;
     private byte[] lastRenderBytes;
-    private bool awaitUpdate;
+    private bool needsRerender;
     private long renderTime;
     private float sizing;
 
@@ -62,7 +62,7 @@ public class RenderSingleTiles : Window
         variation = 0;
 
         lastRenderBytes = Array.Empty<byte>();
-        awaitUpdate = true;
+        needsRerender = true;
     
         renderTime = 0;
 
@@ -73,17 +73,9 @@ public class RenderSingleTiles : Window
 
     public override void Update()
     {
-        if (awaitUpdate)
+        if (needsRerender)
         {
             if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
-        
-            if (lastRenderBytes.Length > 0)
-            {
-                Graphics.DeleteImGuiTexture(render);
-                Graphics.DeleteImGuiTexture(shadowRender);
-                render.Dispose();
-                shadowRender.Dispose();
-            }
 
             Stopwatch time = Stopwatch.StartNew();
 
@@ -93,15 +85,20 @@ public class RenderSingleTiles : Window
             scene.SetBackground(background, context.TileUseRain);
             scene.AddObject(tile);
             scene.Render(context.TileUseUnlit);
-            
-            MappedResource mapped = scene.GetTexData();
-            lastRenderBytes = new byte[mapped.SizeInBytes];
-            Marshal.Copy(mapped.Data, lastRenderBytes, 0, (int)mapped.SizeInBytes);
 
-            Graphics.TryCreateImGuiTexture(tile.FullName, scene.GetTex(), out render);
-            Graphics.TryCreateImGuiTexture(tile.FullName + "_SH", scene.RenderShadowSampled, out shadowRender);
-        
-            awaitUpdate = false;
+            if (render == null || render.Texture != scene.ColorRenderTarget)
+            {
+                render?.Dispose();
+                render = GuiTexture.Create(tile.FullName, scene.ColorRenderTarget);
+            }
+
+            if (shadowRender == null || shadowRender.Texture != scene.ShadowRenderTarget)
+            {
+                shadowRender?.Dispose();
+                shadowRender = GuiTexture.Create(tile.FullName + "_SH", scene.ShadowRenderTarget);
+            }
+
+            needsRerender = false;
 
             renderTime = time.ElapsedMilliseconds;
         }
@@ -139,7 +136,7 @@ public class RenderSingleTiles : Window
                     tile.CachedTexture?.Dispose(); // Dispose of the last tile's texture
                     tile = t;
                     tile.CachedTexture = Graphics.TextureFromImage(context.SavedGraphicsDir + "/" + tile.Name + ".png");
-                    awaitUpdate = true;
+                    needsRerender = true;
                     context.TileLastUsed = tile.ProperName;
                 }
 
@@ -190,14 +187,14 @@ public class RenderSingleTiles : Window
         ImGui.Spacing();
         ImGui.Spacing();
         
-        if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) awaitUpdate = true;
-        if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) awaitUpdate = true;
+        if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) needsRerender = true;
+        if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) needsRerender = true;
         
         Vector2Int rSize = tile.GetRenderSize(scene);
         if (rSize.X != scene.Width || rSize.Y != scene.Height)
         {
             scene.ResizeTo(tile);
-            awaitUpdate = true;
+            needsRerender = true;
         }
 
         if (perRenderOffset != scene.ObjectOffset || perLightOffset != scene.LightOffset)
@@ -205,15 +202,15 @@ public class RenderSingleTiles : Window
             scene.ObjectOffset = perRenderOffset;
             scene.LightOffset = perLightOffset;
             
-            awaitUpdate = true;
+            needsRerender = true;
         }
 
-        if (bg != background || vars != variation) awaitUpdate = true;
+        if (bg != background || vars != variation) needsRerender = true;
 
         ImGui.Separator();
 
-        ImGui.Image(render.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
-        ImGui.Image(shadowRender.Handle, shadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.Image(render.Index, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.Image(shadowRender.Index, shadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
         ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
         

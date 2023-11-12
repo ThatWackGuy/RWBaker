@@ -31,12 +31,6 @@ public static class Graphics
 
     private static Shader[] mainShaders;
     
-    private static readonly Dictionary<string, Tex2D> textures = new();
-    public static ReadOnlyDictionary<string, Tex2D> Textures => textures.AsReadOnly();
-    
-    private static readonly Dictionary<IntPtr, Tex2D> imGuiTextures = new();
-    public static ReadOnlyDictionary<IntPtr, Tex2D> ImGuiTextures => imGuiTextures.AsReadOnly();
-    
     public static ResourceLayout TextureLayout;
     private static ResourceLayout projectionLayout;
 
@@ -54,8 +48,6 @@ public static class Graphics
     public static int WindowPosY { get; private set; }
         
     private static readonly Vector2 scaleFactor = Vector2.One;
-    
-    private static int lastImGuiBinding = 100;
     
     // :3
     public static Texture EmptyTexture;
@@ -256,94 +248,6 @@ public static class Graphics
         UpdateTextureFromImage(texture, image);
 
         return texture;
-    }
-
-    public static bool TryCreateTexture(Tex2D tex)
-    {
-        if (textures.ContainsKey(tex.Name))
-        {
-            Console.WriteLine($"texture with name '{tex.Name}' already exists!");
-            return false;
-        }
-        
-        textures.Add(tex.Name, tex);
-
-        return true;
-    }
-
-    public static bool TryCreateImGuiTexture(string name, Texture texture, out Tex2D tex2D)
-    {
-        IntPtr binding = lastImGuiBinding + 1;
-        
-        if (imGuiTextures.ContainsKey(binding))
-        {
-            Console.WriteLine($"ImGui texture with binding '{binding}' already exists!");
-            tex2D = default;
-            return false;
-        }
-
-        if (textures.ContainsKey(name))
-        {
-            Console.WriteLine($"texture with name '{name}' already exists!");
-            tex2D = default;
-            return false;
-        }
-
-        tex2D = new Tex2D(name, texture, binding);
-        imGuiTextures.Add(binding, tex2D);
-        textures.Add(name, tex2D);
-
-        lastImGuiBinding++;
-        return true;
-    }
-    
-    public static void DeleteTexture(string name)
-    {
-        if (!textures.ContainsKey(name))
-        {
-            Console.WriteLine($"No texture with name '{name}' exists!");
-        }
-        
-        textures.Remove(name);
-    }
-    
-    public static void DeleteTexture(Tex2D tex)
-    {
-        textures.Remove(tex.Name);
-    }
-    
-    public static void DeleteImGuiTexture(IntPtr handle)
-    {
-        if (!imGuiTextures.TryGetValue(handle, out Tex2D tex))
-        {
-            Console.WriteLine($"No texture with ImGui binding {handle} exists!");
-        }
-        
-        if (!textures.ContainsKey(tex.Name))
-        {
-            Console.WriteLine($"No texture with name '{tex.Name}' exists!");
-        }
-        
-        textures.Remove(tex.Name);
-        imGuiTextures.Remove(tex.Handle);
-    }
-    
-    public static void DeleteImGuiTexture(Tex2D tex)
-    {
-        if (!textures.ContainsKey(tex.Name))
-        {
-            Console.WriteLine($"No texture with name '{tex.Name}' exists!");
-            return;
-        }
-        
-        if (!imGuiTextures.ContainsKey(tex.Handle))
-        {
-            Console.WriteLine($"No texture with ImGui binding '{tex.Handle}' exists!");
-            return;
-        }
-        
-        textures.Remove(tex.Name);
-        imGuiTextures.Remove(tex.Handle);
     }
     
     public static void RecreateFontDeviceTexture()
@@ -578,7 +482,7 @@ public static class Graphics
                     cl.SetGraphicsResourceSet(1,
                         cmd.TextureId == fontAtlasID
                             ? fontResourceSet
-                            : imGuiTextures[cmd.TextureId].ResourceSet);
+                            : GuiTexture.GetTexture(cmd.TextureId).ResourceSet);
                 }
                 
                 cl.SetScissorRect(
