@@ -115,9 +115,9 @@ public static class Graphics
         VertexLayoutDescription[] vertexLayouts =
         {
             new(
-                new VertexElementDescription("in_position", VertexElementSemantic.Position, VertexElementFormat.Float2),
+                new VertexElementDescription("in_position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
                 new VertexElementDescription("in_texCoord", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                new VertexElementDescription("in_color", VertexElementSemantic.Color, VertexElementFormat.Byte4_Norm)
+                new VertexElementDescription("in_color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Byte4_Norm)
             )
         };
         

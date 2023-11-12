@@ -30,7 +30,7 @@ public static class RWUtils
             new(
                 new VertexElementDescription(
                     "v_position",
-                    VertexElementSemantic.Position,
+                    VertexElementSemantic.TextureCoordinate,
                     VertexElementFormat.Float3
                 ), // 12 bytes
                 
@@ -42,7 +42,7 @@ public static class RWUtils
                 
                 new VertexElementDescription(
                     "v_color",
-                    VertexElementSemantic.Color,
+                    VertexElementSemantic.TextureCoordinate,
                     VertexElementFormat.Float4
                 ) // 16 bytes
             )
