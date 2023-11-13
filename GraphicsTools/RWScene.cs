@@ -223,8 +223,6 @@ public class RWScene : IDisposable
 
             commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
         }
-
-        commandList.CopyTexture(ShadowRenderTarget, ShadowRenderTarget);
     }
 
     private void RenderObjects()
@@ -358,7 +356,6 @@ public class RWScene : IDisposable
         }
         finally
         {
-            graphicsDevice.Unmap(copyTexture);
             copyTexture.Dispose();
             fence.Dispose();
         }

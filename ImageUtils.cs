@@ -93,6 +93,9 @@ public static class ImageUtils
 
     public static Image<Rgba32> ToImage(GraphicsDevice device, Texture texture)
     {
+        if (texture.Format != PixelFormat.R8_G8_B8_A8_UNorm) throw new ArgumentException("Texture must use R8_G8_B8_A8_UNorm format!");
+        if ((texture.Usage & TextureUsage.Staging) == 0) throw new ArgumentException("Only staging textures may be converted to images!");
+
         var map = device.Map(texture, MapMode.Read);
 
         unsafe
