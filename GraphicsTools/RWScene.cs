@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using RWBaker.GeneralTools;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -342,30 +343,24 @@ public class RWScene : IDisposable
                 TextureUsage.Staging,
                 ColorRenderTarget.Type)
         );
+        var fence = graphicsDevice.ResourceFactory.CreateFence(false);
 
         commandList.Begin();
         commandList.CopyTexture(ColorRenderTarget, copyTexture);
         commandList.End();
-        graphicsDevice.SubmitCommands(commandList);
+        graphicsDevice.SubmitCommands(commandList, fence);
+        graphicsDevice.WaitForFence(fence);
 
         // Save the staging texture as a PNG
-        var map = graphicsDevice.Map(copyTexture, MapMode.Read);
-
         try
         {
-            unsafe
-            {
-                Span<byte> data = new((void*)map.Data, (int)map.SizeInBytes);
-                Image<Rgba32> renderedLayer = Image.LoadPixelData<Rgba32>(data, (int)Width, (int)Height);
-                FileStream stream = File.Create(path);
-                renderedLayer.SaveAsPng(stream);
-                stream.Close();
-            }
+            ImageUtils.ToImage(graphicsDevice, copyTexture).Save(path);
         }
         finally
         {
             graphicsDevice.Unmap(copyTexture);
             copyTexture.Dispose();
+            fence.Dispose();
         }
     }
 

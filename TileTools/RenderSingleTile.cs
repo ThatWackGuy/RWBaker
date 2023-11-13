@@ -29,7 +29,6 @@ public class RenderSingleTiles : Window
     private int background;
     private GuiTexture render;
     private GuiTexture shadowRender;
-    private byte[] lastRenderBytes;
     private bool needsRerender;
     private long renderTime;
     private float sizing;
@@ -61,7 +60,6 @@ public class RenderSingleTiles : Window
 
         variation = 0;
 
-        lastRenderBytes = Array.Empty<byte>();
         needsRerender = true;
     
         renderTime = 0;
@@ -217,9 +215,12 @@ public class RenderSingleTiles : Window
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
-            Image<Rgba32> img = Image.LoadPixelData<Rgba32>(Configuration.Default, lastRenderBytes, (int)scene.Width, (int)scene.Height);
-            img.Save($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
-            img.Dispose();
+
+            scene.ResizeTo(tile);
+            scene.AddObject(tile);
+            scene.Render(context.TileUseUnlit);
+
+            scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
         }
         
         ImGui.End();
