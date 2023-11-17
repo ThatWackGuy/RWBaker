@@ -30,6 +30,11 @@ public class InfoWindow : Window
 
         ImGui.End();
     }
+
+    protected override void Destroy()
+    {
+        
+    }
 }
 
 public class ImGuiInfoWindow : Window
@@ -42,6 +47,11 @@ public class ImGuiInfoWindow : Window
     protected override void Draw()
     {
         ImGui.ShowAboutWindow(ref Open);
+    }
+
+    protected override void Destroy()
+    {
+        
     }
 }
 
@@ -67,5 +77,10 @@ public class CreditsWindow : Window
         Utils.InfoMarker("ADD PEOPLE!");
 
         ImGui.End();
+    }
+
+    protected override void Destroy()
+    {
+        
     }
 }

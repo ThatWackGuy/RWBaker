@@ -1,16 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using ImGuiNET;
-using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using Veldrid;
 
 namespace RWBaker.TileTools;
 
@@ -27,9 +20,8 @@ public class RenderSingleTiles : Window
     private Tile tile;
     private int variation;
     private int background;
-    private GuiTexture render;
-    private GuiTexture shadowRender;
     private bool needsRerender;
+    private bool sceneSizeChanged;
     private long renderTime;
     private float sizing;
 
@@ -54,13 +46,13 @@ public class RenderSingleTiles : Window
         }
     
         scene = new RWScene();
-        scene.ResizeTo(tile);
-    
-        tile.CachedTexture = Graphics.TextureFromImage(context.SavedGraphicsDir + "/" + tile.Name + ".png");
+
+        tile.CacheTexture(context);
 
         variation = 0;
 
         needsRerender = true;
+        sceneSizeChanged = true;
     
         renderTime = 0;
 
@@ -69,37 +61,34 @@ public class RenderSingleTiles : Window
         unsafe { rectOutlineCol = *ImGui.GetStyleColorVec4(ImGuiCol.Border); }
     }
 
+    private void ReRender()
+    {
+        if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
+        if (tile.CachedTexture is null) return;
+            
+        Stopwatch time = Stopwatch.StartNew();
+
+        tile.Variation(variation);
+        tile.UseRainPalette = context.TileUseRain;
+
+        if (sceneSizeChanged)
+        {
+            scene.Resize(tile);
+        }
+            
+        scene.SetBackground(background, context.TileUseRain);
+        scene.AddObject(tile);
+        scene.Render(context.TileUseUnlit);
+
+        needsRerender = false;
+        sceneSizeChanged = false;
+
+        renderTime = time.ElapsedMilliseconds;
+    }
+    
     public override void Update()
     {
-        if (needsRerender)
-        {
-            if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
-
-            Stopwatch time = Stopwatch.StartNew();
-
-            tile.Variation(variation);
-            tile.UseRainPalette = context.TileUseRain;
-            
-            scene.SetBackground(background, context.TileUseRain);
-            scene.AddObject(tile);
-            scene.Render(context.TileUseUnlit);
-
-            if (render == null || render.Texture != scene.ColorRenderTarget)
-            {
-                render?.Dispose();
-                render = GuiTexture.Create(tile.FullName, scene.ColorRenderTarget);
-            }
-
-            if (shadowRender == null || shadowRender.Texture != scene.ShadowRenderTarget)
-            {
-                shadowRender?.Dispose();
-                shadowRender = GuiTexture.Create(tile.FullName + "_SH", scene.ShadowRenderTarget);
-            }
-
-            needsRerender = false;
-
-            renderTime = time.ElapsedMilliseconds;
-        }
+        if (needsRerender) ReRender();
 
         base.Update();
     }
@@ -107,10 +96,7 @@ public class RenderSingleTiles : Window
     protected override void Draw()
     {
         Begin();
-        ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
-        ImGui.TextDisabled($"Using Palette: {Palette.Current.Name}");
-        ImGui.Separator();
-
+        
         if (Program.Tiles.Count == 0)
         {
             ImGui.Text("NO TILES FOUND!");
@@ -118,10 +104,11 @@ public class RenderSingleTiles : Window
             return;
         }
         
-        ImGui.SliderFloat("Render sizing multiplier", ref sizing, 0, 8);
-
+        ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
+        ImGui.TextDisabled($"Using Palette: {Program.CurrentPalette.Name}");
+        
         ImGui.Separator();
-
+        
         ImGui.InputTextWithHint("Search", "Type Words To Search", ref context.TileLastSearched, 280);
         
         if (ImGui.BeginCombo("##tile_picker", tile.ProperName))
@@ -129,11 +116,11 @@ public class RenderSingleTiles : Window
             foreach (Tile t in Program.Tiles.Where(t => t.ProperName.Contains(context.TileLastSearched)))
             {
                 // TODO: Add category color?
-                if (ImGui.Selectable(t.WarningGenerated ? $"[!] {t.ProperName}" : t.ProperName))
+                if (ImGui.Selectable(t.WarningGenerated ? $"[!] {t.ProperName}" : t.ProperName, t.ProperName == tile.ProperName))
                 {
                     tile.CachedTexture?.Dispose(); // Dispose of the last tile's texture
                     tile = t;
-                    tile.CachedTexture = Graphics.TextureFromImage(context.SavedGraphicsDir + "/" + tile.Name + ".png");
+                    tile.CacheTexture(context);
                     needsRerender = true;
                     context.TileLastUsed = tile.ProperName;
                 }
@@ -146,6 +133,13 @@ public class RenderSingleTiles : Window
             }
 
             ImGui.EndCombo();
+        }
+        
+        if (tile.CachedTexture is null)
+        {
+            ImGui.Text("TILE TEXTURE DOES NOT EXIST!");
+            ImGui.End();
+            return;
         }
 
         ImGui.Spacing();
@@ -191,7 +185,7 @@ public class RenderSingleTiles : Window
         Vector2Int rSize = tile.GetRenderSize(scene);
         if (rSize.X != scene.Width || rSize.Y != scene.Height)
         {
-            scene.ResizeTo(tile);
+            sceneSizeChanged = true;
             needsRerender = true;
         }
 
@@ -207,22 +201,33 @@ public class RenderSingleTiles : Window
 
         ImGui.Separator();
 
-        ImGui.Image(render.Index, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
-        ImGui.Image(shadowRender.Index, shadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        if (ImGui.Button("Reset sizing"))
+        {
+            sizing = 1;
+        }
         
-        ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
+        ImGui.SameLine();
+        
+        ImGui.SliderFloat("Render sizing", ref sizing, 0, 8);
         
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
-
-            scene.ResizeTo(tile);
-            scene.AddObject(tile);
-            scene.Render(context.TileUseUnlit);
-
             scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
         }
+
+        ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.SameLine();
+        ImGui.Image(scene.ShadowRender.Index, scene.ShadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
+        ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
+
         ImGui.End();
+    }
+    
+    protected override void Destroy()
+    {
+        scene.Dispose();
+        tile.CachedTexture?.Dispose();
     }
 }

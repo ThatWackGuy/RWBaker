@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.Json.Serialization;
@@ -342,9 +343,9 @@ public class Tile : RWObject, IRWRenderable
 
     public DeviceBuffer CreateObjectData(RWScene scene)
     {
-        DeviceBuffer buffer = Graphics.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
+        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
         
-        Graphics.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
+        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
 
         return buffer;
     }
@@ -359,12 +360,12 @@ public class Tile : RWObject, IRWRenderable
     
     public bool GetTextureSet(RWScene scene, [MaybeNullWhen(false)] out ResourceSet textureSet)
     {
-        textureSet = Graphics.ResourceFactory.CreateResourceSet(
+        textureSet = GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture!,
-                Palette.Current.DisplayTex.Texture,
-                scene.ShadowRenderTarget
+                Program.CurrentPalette.DisplayTex.Texture,
+                scene.ShadowRender.Texture
             )
         );
 
@@ -441,6 +442,14 @@ public class Tile : RWObject, IRWRenderable
     {
         // TODO: TILE BOX RENDERING
         throw new NotImplementedException();
+    }
+
+    public void CacheTexture(Context context)
+    {
+        if (File.Exists(context.SavedGraphicsDir + "/" + Name + ".png"))
+        {
+            CachedTexture = GuiManager.TextureFromImage(context.SavedGraphicsDir + "/" + Name + ".png");
+        }
     }
 
     public void Variation(int var) => renderVariation = int.Clamp(var, 0, Variants - 1);

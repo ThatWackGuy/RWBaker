@@ -2,6 +2,8 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
@@ -10,15 +12,20 @@ using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.SPIRV;
+using Veldrid.StartupUtilities;
 
 namespace RWBaker.GraphicsTools;
 
-public static class Graphics
+public static class GuiManager
 {
     public static GraphicsDevice GraphicsDevice { get; private set; }
     public static ResourceFactory ResourceFactory  { get; private set; }
 
     private static bool frameBegun;
+    
+    public static Sdl2Window Window;
+    public static CommandList CommandList;
+    private static readonly RgbaFloat clearColor = new(0.15f, 0.15f, 0.15f, 0);
 
     private static OutputDescription outputDescription;
 
@@ -26,8 +33,7 @@ public static class Graphics
     private static DeviceBuffer indexBuffer;
     private static DeviceBuffer projMatrixBuffer;
 
-    private static Texture fontTexture;
-    private static TextureView fontTextureView;
+    private static GuiTexture fontTex;
 
     private static Shader[] mainShaders;
     
@@ -37,10 +43,7 @@ public static class Graphics
     private static Pipeline pipeline;
     
     private static ResourceSet mainResourceSet;
-    private static ResourceSet fontResourceSet;
-
-    private const IntPtr fontAtlasID = 1;
-
+    
     public static int WindowWidth { get; private set; }
     public static int WindowHeight { get; private set; }
         
@@ -49,20 +52,80 @@ public static class Graphics
         
     private static readonly Vector2 scaleFactor = Vector2.One;
     
-    // :3
-    public static Texture EmptyTexture;
+    // Windows
+    private static readonly List<Window> windows = new();
+    public static ReadOnlyCollection<Window> Windows => windows.AsReadOnly();
 
-    public static void Load(GraphicsDevice graphics, OutputDescription outDesc, Sdl2Window window)
+    private static readonly List<Window> windowsToDelete = new();
+    private static readonly List<Window> windowsToAdd = new();
+
+    public static void Load(Context context)
     {
+        // no.
+        if (context.WindowState == WindowState.Hidden) context.WindowState = WindowState.Normal;
+        
+        // Create the window
+        VeldridStartup.CreateWindowAndGraphicsDevice(
+            new WindowCreateInfo(
+                context.SavedWindowPos.X,
+                context.SavedWindowPos.Y,
+                context.SavedWindowSize.X,
+                context.SavedWindowSize.Y,
+                context.WindowState == WindowState.Minimized ? WindowState.Normal : context.WindowState,
+                "RWBaker"
+            ),
+            new GraphicsDeviceOptions(
+                true,
+                null,
+                false,
+                ResourceBindingModel.Improved,
+                true,
+                true
+            ),
+            GraphicsBackend.Vulkan,
+            out Window,
+            out GraphicsDevice graphics
+        );
+
+        // with a minimised or hidden window at startup a swapchain cannot be created
+        // leading to vkAcquireNextImageKHR giving out an annoyingly vague memory exception
+        // this line, the state sterilisation and the ternary checks above make sure that never happens
+        if (context.WindowState == WindowState.Minimized) Window.WindowState = WindowState.Minimized;
+
+        CommandList = graphics.ResourceFactory.CreateCommandList();
+        
+        Window.Resized += () =>
+        {
+            GraphicsDevice.MainSwapchain.Resize((uint)Window.Width, (uint)Window.Height);
+            WindowWidth = Window.Width;
+            WindowHeight = Window.Height;
+        };
+
+        Window.Moved += p =>
+        {
+            WindowPosX = p.X;
+            WindowPosY = p.Y;
+        };
+
+        Window.Closing += () =>
+        {
+            context.WindowState = Window.WindowState;
+            context.SavedWindowPos.X = WindowPosX;
+            context.SavedWindowPos.Y = WindowPosY;
+            context.SavedWindowSize.X = WindowWidth;
+            context.SavedWindowSize.Y = WindowHeight;
+            Context.SaveContext();
+        };
+        
         GraphicsDevice = graphics;
         ResourceFactory = graphics.ResourceFactory;
         
-        outputDescription = outDesc;
+        outputDescription = graphics.MainSwapchain.Framebuffer.OutputDescription;
 
-        WindowWidth = window.Width;
-        WindowHeight = window.Height;
-        WindowPosX = window.X;
-        WindowPosY = window.Y;
+        WindowWidth = Window.Width;
+        WindowHeight = Window.Height;
+        WindowPosX = Window.X;
+        WindowPosY = Window.Y;
         
         ImGui.CreateContext();
         ImGuiIOPtr io = ImGui.GetIO();
@@ -71,33 +134,77 @@ public static class Graphics
         io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines;
         io.ConfigDockingWithShift = true;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
+        io.ConfigDockingTransparentPayload = true;
         
         CreateDeviceResources();
+        RecreateFonts();
         SetPerFrameImGuiData(1f / 60f);
         
         ImGui.NewFrame();
         frameBegun = true;
     }
 
-    public static void WindowResized(int width, int height)
+    public static void RenderProcess()
     {
-        WindowWidth = width;
-        WindowHeight = height;
-    }
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        while (Window.Exists)
+        {
+            float time = stopwatch.ElapsedTicks / (float)Stopwatch.Frequency;
+            stopwatch.Restart();
+            InputSnapshot snapshot = Window.PumpEvents();
+            if (!Window.Exists) break;
+
+            UpdateImGui(time, snapshot);
+            Utils.Nav();
+            
+            ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+
+            if (windowsToDelete.Count > 0)
+            {
+                // Delete windows marked for deletion
+                foreach (Window w in windowsToDelete)
+                {
+                    windows.Remove(w);
+                    w.Dispose();
+                }
+
+                windowsToDelete.Clear();
+            }
+
+            if (windowsToAdd.Count > 0)
+            {
+                // Add pending windows
+                foreach (Window w in windowsToAdd)
+                {
+                    windows.Add(w);
+                }
+
+                windowsToAdd.Clear();
+            }
+
+            // Update remaining windows
+            foreach (Window w in windows)
+            {
+                w.Update();
+            }
+
+            CommandList.Begin();
+            CommandList.SetFramebuffer(GraphicsDevice.MainSwapchain.Framebuffer);
+            CommandList.ClearColorTarget(0, clearColor);
+            Render(CommandList);
+            CommandList.End();
+            GraphicsDevice.SubmitCommands(CommandList);
+            GraphicsDevice.SwapBuffers(GraphicsDevice.MainSwapchain);
+        }
         
-    public static void WindowMoved(int x, int y)
-    {
-        WindowPosX = x;
-        WindowPosY = y;
+        Dispose();
     }
-    
+
     public static void CreateDeviceResources()
     {
         vertexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(10000, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
         indexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(2000, BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-
-        RecreateFontDeviceTexture();
-
+        
         projMatrixBuffer = ResourceFactory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
         
         ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.vertex.spv"), "main");
@@ -140,21 +247,45 @@ public static class Graphics
         pipeline = ResourceFactory.CreateGraphicsPipeline(ref pipelineDesc);
 
         mainResourceSet = ResourceFactory.CreateResourceSet(new ResourceSetDescription(projectionLayout, projMatrixBuffer, GraphicsDevice.PointSampler));
+    }
+    
+    // TODO: Custom font support later?
+    public static void RecreateFonts()
+    {
+        ImGuiIOPtr io = ImGui.GetIO();
 
-        fontResourceSet = ResourceFactory.CreateResourceSet(new ResourceSetDescription(TextureLayout, fontTextureView));
+        io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytesPerPixel);
 
-        EmptyTexture = ResourceFactory.CreateTexture(
-            new TextureDescription(
-                1,
-                1,
-                1,
+        Texture texture = ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(
+                (uint)width,
+                (uint)height,
                 1,
                 1,
                 PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Sampled,
-                TextureType.Texture2D
+                TextureUsage.Sampled
             )
         );
+
+        GraphicsDevice.UpdateTexture(
+            texture,
+            pixels,
+            (uint)(bytesPerPixel * width * height),
+            0,
+            0,
+            0,
+            (uint)width,
+            (uint)height,
+            1,
+            0,
+            0
+        );
+        
+        fontTex = GuiTexture.Create("_default_font", texture);
+
+        io.Fonts.SetTexID(fontTex.Index);
+        
+        io.Fonts.ClearTexData();
     }
 
     public static void UpdateTextureFromImage(Texture texture, Image<Rgba32> image)
@@ -249,41 +380,22 @@ public static class Graphics
 
         return texture;
     }
-    
-    public static void RecreateFontDeviceTexture()
+
+    public static void AddWindow(Window window) 
     {
-        ImGuiIOPtr io = ImGui.GetIO();
+        if (Windows.Any(w => w.InternalIdentifier == window.InternalIdentifier)) return;
 
-        io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytesPerPixel);
-        
-        io.Fonts.SetTexID(fontAtlasID);
-
-        fontTexture = ResourceFactory.CreateTexture(TextureDescription.Texture2D(
-            (uint)width,
-            (uint)height,
-            1,
-            1,
-            PixelFormat.R8_G8_B8_A8_UNorm,
-            TextureUsage.Sampled));
-        
-        GraphicsDevice.UpdateTexture(
-            fontTexture,
-            pixels,
-            (uint)(bytesPerPixel * width * height),
-            0,
-            0,
-            0,
-            (uint)width,
-            (uint)height,
-            1,
-            0,
-            0);
-        
-        fontTextureView = ResourceFactory.CreateTextureView(fontTexture);
-
-        io.Fonts.ClearTexData();
+        window.Open = true;
+        windowsToAdd.Add(window);
     }
-    
+
+    public static void RemoveWindow(Window window)
+    {
+        if (Windows.All(w => w.InternalIdentifier != window.InternalIdentifier)) return;
+        
+        windowsToDelete.Add(window);
+    }
+
     // Below is dedicated to ImGui
     // DO NOT TOUCH, BLACK MAGIC
     public static void Render(CommandList cl)
@@ -480,9 +592,10 @@ public static class Graphics
                 if (cmd.TextureId != IntPtr.Zero)
                 {
                     cl.SetGraphicsResourceSet(1,
-                        cmd.TextureId == fontAtlasID
-                            ? fontResourceSet
-                            : GuiTexture.GetTexture(cmd.TextureId).ResourceSet);
+                        cmd.TextureId == fontTex.Index
+                            ? fontTex.ResourceSet
+                            : GuiTexture.GetTexture(cmd.TextureId).ResourceSet
+                    );
                 }
                 
                 cl.SetScissorRect(
@@ -490,7 +603,8 @@ public static class Graphics
                     (uint)cmd.ClipRect.X,
                     (uint)cmd.ClipRect.Y,
                     (uint)(cmd.ClipRect.Z - cmd.ClipRect.X),
-                    (uint)(cmd.ClipRect.W - cmd.ClipRect.Y));
+                    (uint)(cmd.ClipRect.W - cmd.ClipRect.Y)
+                );
 
                 cl.DrawIndexed(cmd.ElemCount, 1, cmd.IdxOffset + (uint)idxOffset, (int)cmd.VtxOffset + vtxOffset, 0);
             }
@@ -502,19 +616,23 @@ public static class Graphics
     
     public static void Dispose()
     {
+        GraphicsDevice.WaitForIdle();
+        CommandList.Dispose();
         vertexBuffer.Dispose();
         indexBuffer.Dispose();
         projMatrixBuffer.Dispose();
-        fontTexture.Dispose();
-        fontTextureView.Dispose();
         projectionLayout.Dispose();
         TextureLayout.Dispose();
         pipeline.Dispose();
         mainResourceSet.Dispose();
+        
+        GuiTexture.DisposeAllTextures();
 
         foreach (Shader shader in mainShaders)
         {
             shader.Dispose();
         }
+        
+        GraphicsDevice.Dispose();
     }
 }

@@ -39,4 +39,9 @@ public class TileLoader : Window
             ImGui.TextDisabled(ln);
         }
     }
+
+    protected override void Destroy()
+    {
+        
+    }
 }

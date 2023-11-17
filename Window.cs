@@ -1,5 +1,6 @@
 using System;
 using ImGuiNET;
+using RWBaker.GraphicsTools;
 
 namespace RWBaker;
 
@@ -9,7 +10,6 @@ public abstract class Window : IDisposable
     public readonly string InternalIdentifier;
 
     public bool Open;
-    public bool MarkedForDeletion;
 
     protected Window(string displayName, string internalIdentifier)
     {
@@ -23,12 +23,14 @@ public abstract class Window : IDisposable
     {
         if (!Open)
         {
-            MarkedForDeletion = true;
+            GuiManager.RemoveWindow(this);
             return;
         }
 
         Draw();
     }
+    
+    protected abstract void Destroy();
 
     protected void Begin()
     {
@@ -50,8 +52,10 @@ public abstract class Window : IDisposable
         ImGui.Begin(DisplayName, flags);
     }
 
+
     public void Dispose()
     {
+        Destroy();
         GC.SuppressFinalize(this);
     }
 }

@@ -1,12 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using RWBaker.GeneralTools;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -21,19 +18,18 @@ public class RWScene : IDisposable
 
     private RgbaFloat RenderBg;
 
-    public Texture ColorRenderTarget;
+    public GuiTexture ObjectRender;
     private Texture renderObjectStencil;
 
-    public Texture ShadowRenderTarget;
+    public GuiTexture ShadowRender;
 
-    private readonly ResourceSet renderShadowDataSet;
+    private readonly DeviceBuffer shadowDataBuffer;
+    private readonly ResourceSet shadowDataSet;
 
     private DeviceBuffer vertexBuffer;
     private DeviceBuffer indexBuffer;
-
-    private readonly DeviceBuffer shadowDataBuffer;
-
-    public Framebuffer LitFramebuffer { get; private set; }
+    
+    public Framebuffer ObjectFramebuffer { get; private set; }
     private Framebuffer shadowFramebuffer;
     private Pipeline shadowPipeline;
     private readonly CommandList commandList;
@@ -47,26 +43,30 @@ public class RWScene : IDisposable
 
     public RWScene()
     {
-        graphicsDevice = Graphics.GraphicsDevice;
+        graphicsDevice = GuiManager.GraphicsDevice;
 
-        ResourceFactory factory = Graphics.ResourceFactory;
+        ResourceFactory factory = GuiManager.ResourceFactory;
 
         RenderBg = RgbaFloat.Clear;
 
         // Draw Buffers
         vertexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer)); // 32 * const
         indexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.IndexBuffer)); // 4 * const
-
+        
         shadowDataBuffer = factory.CreateBuffer(new BufferDescription(96 /*size of shadow uniform*/, BufferUsage.UniformBuffer));
 
-        renderShadowDataSet = factory.CreateResourceSet(
+        shadowDataSet = factory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectDataLayout,
                 shadowDataBuffer
             )
         );
 
-        Resize(1, 1);
+        Width = 1;
+        Height = 1;
+        
+        RecreateTextures(factory);
+        RecreatePipelines(factory);
 
         commandList = factory.CreateCommandList();
     }
@@ -82,7 +82,7 @@ public class RWScene : IDisposable
         RecreatePipelines(factory);
     }
 
-    public void ResizeTo(IRWRenderable renderable)
+    public void Resize(IRWRenderable renderable)
     {
         Vector2Int size = renderable.GetRenderSize(this);
 
@@ -97,8 +97,8 @@ public class RWScene : IDisposable
 
     private void RecreateTextures(ResourceFactory factory)
     {
-        ColorRenderTarget?.Dispose();
-        ColorRenderTarget = factory.CreateTexture(
+        ObjectRender?.Dispose();
+        Texture objectTarget = factory.CreateTexture(
             new TextureDescription(
                 Width,
                 Height,
@@ -110,7 +110,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ColorRenderTarget.Name = "RWScene Render Texture";
+        ObjectRender = GuiTexture.Create("rwscene_object_render", objectTarget);
 
         renderObjectStencil?.Dispose();
         renderObjectStencil = factory.CreateTexture(
@@ -127,8 +127,8 @@ public class RWScene : IDisposable
         );
         renderObjectStencil.Name = "RWScene Object Depth Texture";
 
-        ShadowRenderTarget?.Dispose();
-        ShadowRenderTarget = factory.CreateTexture(
+        ShadowRender?.Dispose();
+        Texture shadowTarget = factory.CreateTexture(
             new TextureDescription(
                 Width,
                 Height,
@@ -140,14 +140,15 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
+        ShadowRender = GuiTexture.Create("rwscene_shadow_render", shadowTarget);
     }
 
     private void RecreatePipelines(ResourceFactory factory)
     {
-        LitFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ColorRenderTarget));
-        LitFramebuffer.Name = "LIT FRAMEBUFFER";
+        ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
+        ObjectFramebuffer.Name = "LIT FRAMEBUFFER";
 
-        shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRenderTarget));
+        shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
         shadowFramebuffer.Name = "SHADOW FRAMEBUFFER";
 
         ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
@@ -182,6 +183,11 @@ public class RWScene : IDisposable
 
     public void ClearScene()
     {
+        foreach (RWRenderDescription desc in renderItems)
+        {
+            desc.Dispose();
+        }
+        
         renderItems.Clear();
     }
 
@@ -196,7 +202,7 @@ public class RWScene : IDisposable
         {
             0 => RgbaFloat.Clear,
             1 => RgbaFloat.White,
-            2 => Palette.Current.ColorsImage[0, rainBg ? 8 : 0].ToRgbaFloat(),
+            2 => Program.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
             _ => throw new ArgumentOutOfRangeException()
         };
     }
@@ -218,7 +224,7 @@ public class RWScene : IDisposable
             commandList.SetIndexBuffer(indexBuffer, IndexFormat.UInt16);
 
             commandList.SetPipeline(shadowPipeline);
-            commandList.SetGraphicsResourceSet(0, renderShadowDataSet);
+            commandList.SetGraphicsResourceSet(0, shadowDataSet);
             if (desc.HasTextureSet) commandList.SetGraphicsResourceSet(1, desc.TextureSet);
 
             commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
@@ -227,7 +233,7 @@ public class RWScene : IDisposable
 
     private void RenderObjects()
     {
-        commandList.SetFramebuffer(LitFramebuffer);
+        commandList.SetFramebuffer(ObjectFramebuffer);
         commandList.ClearColorTarget(0, RenderBg);
         commandList.ClearDepthStencil(1, 0);
 
@@ -254,7 +260,7 @@ public class RWScene : IDisposable
         ShaderDescription testF = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.testFrag.glsl"), "main", true);
         Shader[] shaders = graphicsDevice.ResourceFactory.CreateFromSpirv(testV, testF);
 
-        Pipeline pipeline = Graphics.ResourceFactory.CreateGraphicsPipeline(
+        Pipeline pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
                 BlendStateDescription.SingleAlphaBlend,
                 new DepthStencilStateDescription(true, true, ComparisonKind.Less),
@@ -262,7 +268,7 @@ public class RWScene : IDisposable
                 PrimitiveTopology.TriangleList,
                 new ShaderSetDescription(RWUtils.RWVertexLayout, shaders),
                 Array.Empty<ResourceLayout>(),
-                LitFramebuffer.OutputDescription
+                ObjectFramebuffer.OutputDescription
             )
         );
         pipeline.Name = "TEST PIPELINE";
@@ -285,7 +291,7 @@ public class RWScene : IDisposable
         IB.Name = "TEST IB";
         graphicsDevice.UpdateBuffer(IB, 0, RWVertexData.TestQuadIndices());
 
-        commandList.SetFramebuffer(LitFramebuffer);
+        commandList.SetFramebuffer(ObjectFramebuffer);
         commandList.ClearColorTarget(0, RgbaFloat.Clear);
         commandList.ClearDepthStencil(1, 0);
 
@@ -330,21 +336,22 @@ public class RWScene : IDisposable
     public void SaveToFile(string path)
     {
         // Copy the color render target into a staging texture
-        var copyTexture = graphicsDevice.ResourceFactory.CreateTexture(
+        Texture copyTexture = graphicsDevice.ResourceFactory.CreateTexture(
             new TextureDescription(
-                ColorRenderTarget.Width,
-                ColorRenderTarget.Height,
-                ColorRenderTarget.Depth,
-                ColorRenderTarget.MipLevels,
-                ColorRenderTarget.ArrayLayers,
-                ColorRenderTarget.Format,
+                ObjectRender.Texture.Width,
+                ObjectRender.Texture.Height,
+                ObjectRender.Texture.Depth,
+                ObjectRender.Texture.MipLevels,
+                ObjectRender.Texture.ArrayLayers,
+                ObjectRender.Texture.Format,
                 TextureUsage.Staging,
-                ColorRenderTarget.Type)
+                ObjectRender.Texture.Type
+            )
         );
-        var fence = graphicsDevice.ResourceFactory.CreateFence(false);
+        Fence fence = graphicsDevice.ResourceFactory.CreateFence(false);
 
         commandList.Begin();
-        commandList.CopyTexture(ColorRenderTarget, copyTexture);
+        commandList.CopyTexture(ObjectRender.Texture, copyTexture);
         commandList.End();
         graphicsDevice.SubmitCommands(commandList, fence);
         graphicsDevice.WaitForFence(fence);
@@ -363,8 +370,24 @@ public class RWScene : IDisposable
 
     public void Dispose()
     {
-        // TODO: DISPOSE WITHOUT CRASHING EVERYTHING
+        graphicsDevice.WaitForIdle();
+        ClearScene();
 
+        shadowDataSet.Dispose();
+
+        ObjectRender.Dispose();
+        renderObjectStencil.Dispose();
+        ObjectFramebuffer.Dispose();
+
+        ShadowRender.Dispose();
+        shadowDataSet.Dispose();
+        shadowFramebuffer.Dispose();
+
+        vertexBuffer.Dispose();
+        indexBuffer.Dispose();
+        
+        commandList.Dispose();
+        
         GC.SuppressFinalize(this);
     }
 }

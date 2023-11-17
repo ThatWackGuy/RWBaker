@@ -50,18 +50,19 @@ public class GuiTexture : IDisposable
         Size = new Vector2(texture.Width, texture.Height);
 
         Texture = texture;
+        Texture.Name = name;
 
         if ((texture.Usage & TextureUsage.Sampled) != 0)
         {
-            TextureView view = Graphics.GraphicsDevice.ResourceFactory.CreateTextureView(texture);
+            TextureView view = GuiManager.ResourceFactory.CreateTextureView(texture);
             _view = view;
-            _resourceSet = Graphics.GraphicsDevice.ResourceFactory.CreateResourceSet(new ResourceSetDescription(textureLayout, _view));
+            _resourceSet = GuiManager.ResourceFactory.CreateResourceSet(new ResourceSetDescription(textureLayout, _view));
         }
     }
 
     public static GuiTexture Create(string name, Texture texture, ResourceLayout? textureLayout = null)
     {
-        var tex = new GuiTexture(name, texture, textureLayout ?? Graphics.TextureLayout, _nextIndex);
+        GuiTexture tex = new(name, texture, textureLayout ?? GuiManager.TextureLayout, _nextIndex);
         _map.Add(_nextIndex, tex);
         _nextIndex++;
         return tex;
@@ -72,11 +73,24 @@ public class GuiTexture : IDisposable
         return _map[index];
     }
 
+    public static void DisposeAllTextures()
+    {
+        foreach (var texture in _map)
+        {
+            texture.Value.Dispose();
+        }
+        
+        _map.Clear();
+    }
+
     public void Dispose()
     {
-        _view?.Dispose();
         _resourceSet?.Dispose();
-
+        _view?.Dispose();
+        Texture.Dispose();
+        
         _map.Remove(Index);
+        
+        GC.SuppressFinalize(this);
     }
 }
