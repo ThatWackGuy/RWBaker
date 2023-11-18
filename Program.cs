@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
 using RWBaker.PropTools;
@@ -11,6 +12,7 @@ namespace RWBaker;
 
 public static class Program
 {
+    public static Context Context;
     public static GuiTexture IconTexture;
     
     public static readonly List<Tile> Tiles = new();
@@ -25,26 +27,42 @@ public static class Program
     {
         Configuration.Default.PreferContiguousImageBuffers = true;
         
-        Context.LoadContext();
-        Context context = Context.GetContext();
+        // Create the userdata file if it doesn't exist
+        if (!File.Exists("./userdata.json"))
+        {
+            File.Create("./userdata.json").Close();
+            
+            Context = new Context();
+        }
+        else
+        {
+            try
+            {
+                Context = Context.Load("./userdata.json");
+            }
+            catch (Exception e)
+            {
+                Context = new Context();
+                GuiManager.Exception(e);
+            }
+        }
         
-        GuiManager.Load(context);
+        Context.Save("./userdata.json");
+
+        GuiManager.Load(Context);
 
         // Load Icon Texture
         Texture iconTex = GuiManager.TextureFromResource("res.bakertex.png");
         IconTexture = GuiTexture.Create("_icon", iconTex);
 
-        if (context.SavedGraphicsDir != "")
+        if (Context.SavedGraphicsDir != "")
         {
-            RWUtils.GetTiles(out string tileLog);
+            RWUtils.GetTiles(Context, out string tileLog);
             Console.WriteLine($"TILE LOAD LOG:\n{tileLog}\n\n");
         }
-
-        if (context.SavedPaletteDir != "")
-        {
-            RWUtils.GetPalettes();
-            RWUtils.PaletteCheck();
-        }
+        
+        RWUtils.GetPalettes(Context);
+        RWUtils.PaletteCheck(Context);
         
         RWUtils.LoadGraphicsResources();
         

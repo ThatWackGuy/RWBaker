@@ -374,7 +374,7 @@ public class Tile : RWObject, IRWRenderable
 
     private RWRenderDescription VoxelInfo(RWScene scene)
     {
-        if (CachedTexture == null) throw new NullReferenceException("WHERES THE TILE TEXTURE");
+        if (CachedTexture == null) throw new NullReferenceException("Cached tile texture does not exist");
 
         int layerCount = renderRepeatLayers.Sum();
         var vertices = new RWVertexData[layerCount * 4];

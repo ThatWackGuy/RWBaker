@@ -164,10 +164,8 @@ public static class RWUtils
         return false;
     }
     
-    public static void GetPalettes()
+    public static void GetPalettes(Context context)
     {
-        Context context = Context.GetContext();
-        
         if (context.SavedPaletteDir == "") return;
     
         foreach (Palette palette in Program.Palettes)
@@ -192,10 +190,8 @@ public static class RWUtils
         }
     }
     
-    public static void PaletteCheck()
+    public static void PaletteCheck(Context context)
     {
-        Context context = Context.GetContext();
-        
         try
         {
             List<Palette> Palettes = Program.Palettes;
@@ -261,9 +257,8 @@ public static class RWUtils
         }
     }
 
-    public static void GetTiles(out string log)
+    public static void GetTiles(Context context, out string log)
     {
-        Context context = Context.GetContext();
         log = "";
 
         if (!Directory.Exists(context.SavedGraphicsDir))
@@ -316,9 +311,8 @@ public static class RWUtils
         if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
     }
     
-    public static void GetProps(out string log)
+    public static void GetProps(Context context, out string log)
     {
-        Context context = Context.GetContext();
         log = "";
 
         if (!Directory.Exists(context.SavedPropsDir))

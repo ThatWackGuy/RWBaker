@@ -9,8 +9,6 @@ namespace RWBaker.TileTools;
 
 public class RenderSingleTiles : Window
 {
-    private readonly Context context;
-    
     private Vector2 renderOffset;
     private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)tile.PixelSize;
     private Vector2 lightOffset;
@@ -29,10 +27,6 @@ public class RenderSingleTiles : Window
     
     public RenderSingleTiles() : base("Render Tile", "render_tile")
     {
-        Open = true;
-    
-        context = Context.GetContext();
-    
         renderOffset = Vector2.Zero;
         lightOffset = Vector2.Zero;
 

@@ -8,13 +8,15 @@ public abstract class Window : IDisposable
 {
     public string DisplayName;
     public readonly string InternalIdentifier;
-
     public bool Open;
+    
+    protected Context context;
 
     protected Window(string displayName, string internalIdentifier)
     {
         DisplayName = displayName;
         InternalIdentifier = internalIdentifier;
+        context = Program.Context;
     }
 
     protected abstract void Draw();

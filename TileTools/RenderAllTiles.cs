@@ -6,18 +6,12 @@ namespace RWBaker.TileTools;
 
 public class RenderAllTiles : Window
 {
-    private readonly Context context;
-
     private RWScene scene;
     private Vector2Int renderOffset;
     private long renderTime;
     
     public RenderAllTiles() : base("Render Tiles", "render_tiles")
     {
-        Open = true;
-        
-        context = Context.GetContext();
-
         scene = new RWScene();
         renderOffset = Vector2Int.Zero;
         renderTime = 0;

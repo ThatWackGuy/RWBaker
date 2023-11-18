@@ -6,16 +6,10 @@ namespace RWBaker.GeneralTools;
 
 public class PalettePicker : Window
 {
-    private readonly Context context;
-    
     private int paletteColorSize;
 
     public PalettePicker() : base("Palette Picker", "palette_mix")
     {
-        Open = true;
-
-        context = Context.GetContext();
-        
         paletteColorSize = 15;
     }
 
@@ -28,7 +22,7 @@ public class PalettePicker : Window
         if (ImGui.Button("Get palettes"))
         {
             Program.Palettes.Clear();
-            RWUtils.GetPalettes();
+            RWUtils.GetPalettes(context);
         }
 
         if (Program.Palettes.Count <= 0)

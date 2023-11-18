@@ -7,6 +7,7 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
+using RWBaker.GeneralTools;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
@@ -75,9 +76,9 @@ public static class GuiManager
                 "RWBaker"
             ),
             new GraphicsDeviceOptions(
-                true,
+                context.GraphicsDebug,
                 null,
-                false,
+                context.VSync,
                 ResourceBindingModel.Improved,
                 true,
                 true
@@ -114,7 +115,7 @@ public static class GuiManager
             context.SavedWindowPos.Y = WindowPosY;
             context.SavedWindowSize.X = WindowWidth;
             context.SavedWindowSize.Y = WindowHeight;
-            Context.SaveContext();
+            Program.Context.Save("./userdata.json");
         };
         
         GraphicsDevice = graphics;
@@ -185,7 +186,15 @@ public static class GuiManager
             // Update remaining windows
             foreach (Window w in windows)
             {
-                w.Update();
+                try
+                {
+                    w.Update();
+                }
+                catch (Exception e)
+                {
+                    RemoveWindow(w);
+                    Exception(e);
+                }
             }
 
             CommandList.Begin();
@@ -195,6 +204,7 @@ public static class GuiManager
             CommandList.End();
             GraphicsDevice.SubmitCommands(CommandList);
             GraphicsDevice.SwapBuffers(GraphicsDevice.MainSwapchain);
+            GraphicsDevice.WaitForIdle();
         }
         
         Dispose();
@@ -394,6 +404,11 @@ public static class GuiManager
         if (Windows.All(w => w.InternalIdentifier != window.InternalIdentifier)) return;
         
         windowsToDelete.Add(window);
+    }
+
+    public static void Exception(Exception e)
+    {
+        AddWindow(new ExceptionWindow(e));
     }
 
     // Below is dedicated to ImGui
