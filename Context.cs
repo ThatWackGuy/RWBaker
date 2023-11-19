@@ -89,13 +89,13 @@ public class Context
     public static Context Load(string path)
     {
         Context? loaded = JsonSerializer.Deserialize<Context>(
-            File.ReadAllText("./userdata.json"),
+            File.ReadAllText(path),
             JsonOptions
         );
 
         if (loaded is null)
         {
-            throw new JsonException("An error occured while parsing userdata!\nPlease check ./userdata.json");
+            throw new JsonException($"An error occured while parsing userdata!\nPlease check {path}");
         }
 
         return loaded;
