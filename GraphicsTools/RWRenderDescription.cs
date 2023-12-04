@@ -12,7 +12,7 @@ public struct RWRenderDescription : IDisposable
     public readonly bool HasTextureSet;
     public readonly DeviceBuffer ObjectDataBuffer;
     public readonly ResourceSet ObjectData;
-    public readonly RWShadowRenderUniform ShadowData;
+    public RWShadowRenderUniform ShadowData;
     public readonly Pipeline Pipeline;
 
     public RWRenderDescription(RWVertexData[] vertices, ushort[] indices, IRWRenderable renderable, RWScene scene)

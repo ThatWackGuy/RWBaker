@@ -18,10 +18,12 @@ public class RenderSingleTiles : Window
     private Tile tile;
     private int variation;
     private int background;
+    private int layer;
     private bool needsRerender;
     private bool sceneSizeChanged;
     private long renderTime;
     private float sizing;
+    private int shadowRepeat;
 
     private readonly Vector4 rectOutlineCol;
     
@@ -51,6 +53,7 @@ public class RenderSingleTiles : Window
         renderTime = 0;
 
         sizing = 1;
+        shadowRepeat = 10;
 
         unsafe { rectOutlineCol = *ImGui.GetStyleColorVec4(ImGuiCol.Border); }
     }
@@ -62,14 +65,16 @@ public class RenderSingleTiles : Window
             
         Stopwatch time = Stopwatch.StartNew();
 
-        tile.Variation(variation);
+        tile.RenderVariation = variation;
         tile.UseRainPalette = context.TileUseRain;
+        tile.RenderLayer = layer;
 
         if (sceneSizeChanged)
         {
             scene.Resize(tile);
         }
-            
+
+        scene.ShadowRepeat = shadowRepeat;
         scene.SetBackground(background, context.TileUseRain);
         scene.AddObject(tile);
         scene.Render(context.TileUseUnlit);
@@ -98,8 +103,8 @@ public class RenderSingleTiles : Window
             return;
         }
         
-        ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
-        ImGui.TextDisabled($"Using Palette: {Program.CurrentPalette.Name}");
+        ImGui.TextDisabled(context.SavedGraphicsDir);
+        ImGui.TextDisabled(Program.CurrentPalette.Name);
         
         ImGui.Separator();
         
@@ -109,8 +114,14 @@ public class RenderSingleTiles : Window
         {
             foreach (Tile t in Program.Tiles.Where(t => t.ProperName.Contains(context.TileLastSearched)))
             {
+                if (t.WarningGenerated)
+                {
+                    Utils.InfoMarker($"Warnings have been generated:\n{t.Warnings}");
+                    ImGui.SameLine();
+                }
+                
                 // TODO: Add category color?
-                if (ImGui.Selectable(t.WarningGenerated ? $"[!] {t.ProperName}" : t.ProperName, t.ProperName == tile.ProperName))
+                if (ImGui.Selectable(t.ProperName, t.ProperName == tile.ProperName))
                 {
                     tile.CachedTexture?.Dispose(); // Dispose of the last tile's texture
                     tile = t;
@@ -118,12 +129,6 @@ public class RenderSingleTiles : Window
                     needsRerender = true;
                     context.TileLastUsed = tile.ProperName;
                 }
-
-                if (!t.WarningGenerated) continue;
-                if (!ImGui.IsItemHovered()) continue;
-                if (!ImGui.BeginTooltip()) continue;
-                ImGui.TextDisabled($"Warnings have been generated:\n{t.Warnings}");
-                ImGui.EndTooltip();
             }
 
             ImGui.EndCombo();
@@ -172,6 +177,18 @@ public class RenderSingleTiles : Window
         
         ImGui.Spacing();
         ImGui.Spacing();
+
+        int ly = layer;
+        ImGui.SliderInt("Layer", ref layer, 0, tile.HasSpecs2 ? 1 : 2);
+        
+        ImGui.Spacing();
+        ImGui.Spacing();
+        
+        int sr = shadowRepeat;
+        ImGui.SliderInt("Shadow Repeat", ref shadowRepeat, 1, 40);
+        
+        ImGui.Spacing();
+        ImGui.Spacing();
         
         if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) needsRerender = true;
         if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) needsRerender = true;
@@ -191,7 +208,7 @@ public class RenderSingleTiles : Window
             needsRerender = true;
         }
 
-        if (bg != background || vars != variation) needsRerender = true;
+        if (bg != background || vars != variation || ly != layer || sr != shadowRepeat) needsRerender = true;
 
         ImGui.Separator();
 
@@ -206,7 +223,7 @@ public class RenderSingleTiles : Window
         
         if (ImGui.Button("Save as Image"))
         {
-            Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
+            Directory.CreateDirectory($"{context.SavedGraphicsDir}/RENDERED");
             scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
         }
 
@@ -214,7 +231,7 @@ public class RenderSingleTiles : Window
         ImGui.SameLine();
         ImGui.Image(scene.ShadowRender.Index, scene.ShadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
-        ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
+        ImGui.TextDisabled($"{renderTime} ms");
 
         ImGui.End();
     }

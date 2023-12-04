@@ -8,6 +8,7 @@ layout(set = 0, binding = 0, std140) uniform RenderData
     vec2 shTexSize;
     bool pRain;
     int layerCount;
+    int palLayer;
 } d;
 
 layout(set = 1, binding = 0) uniform sampler2D tex; // tile texture
@@ -37,9 +38,9 @@ void main()
         offset += 3;
     }
     
-    vec4 pH = texture(pTex, vec2(f_layer, offset) / pSize);
-    vec4 pB = texture(pTex, vec2(f_layer, offset + 1) / pSize);
-    vec4 pS = texture(pTex, vec2(f_layer, offset + 2) / pSize);
+    vec4 pH = texture(pTex, vec2(f_layer + d.palLayer * 10, offset) / pSize);
+    vec4 pB = texture(pTex, vec2(f_layer + d.palLayer * 10, offset + 1) / pSize);
+    vec4 pS = texture(pTex, vec2(f_layer + d.palLayer * 10, offset + 2) / pSize);
     
     vec4 cPix = texture(tex, f_texCoord / d.texSize);
     

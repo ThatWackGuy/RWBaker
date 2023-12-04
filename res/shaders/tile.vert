@@ -8,6 +8,7 @@ layout(set = 0, binding = 0, std140) uniform RenderData
     vec2 shTexSize;
     bool pRain;
     int layerCount;
+    int palLayer;
 } d;
 
 layout(location = 0) in vec3 v_position;
@@ -20,9 +21,9 @@ layout(location = 2) out float f_shLayer;
 
 void main()
 {
-    gl_Position = d.vTransform * vec4(v_position.xy + max(-d.vOffsetPerLayer.xy, 0.0) * (d.layerCount - 1) + d.vOffsetPerLayer.xy * v_position.z, v_position.z, 1);
+    gl_Position = d.vTransform * vec4(v_position.xy + max(-d.vOffsetPerLayer, 0) * (d.layerCount - 1) + d.vOffsetPerLayer * v_position.z, v_position.z, 1);
 
     f_texCoord = v_texCoord;
     f_layer = int(v_position.z);
-    f_shLayer = (d.vTransform * vec4(0, 0, v_position.z - 0.2, 1)).z;
+    f_shLayer = (d.vTransform * vec4(0, 0, v_position.z - 0.8, 1)).z;
 }

@@ -217,8 +217,8 @@ public static class GuiManager
         
         projMatrixBuffer = ResourceFactory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
         
-        ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.vertex.spv"), "main");
-        ShaderDescription guiFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.fragment.spv"), "main");
+        ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.vertex.spv"), "main");
+        ShaderDescription guiFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.fragment.spv"), "main");
         mainShaders = ResourceFactory.CreateFromSpirv(guiVert, guiFrag);
 
         VertexLayoutDescription[] vertexLayouts =

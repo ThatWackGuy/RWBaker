@@ -40,6 +40,7 @@ public class RWScene : IDisposable
     public Vector2 LightOffset = Vector2.Zero;
 
     public Matrix4x4 Transform { get; private set; }
+    public int ShadowRepeat;
 
     public RWScene()
     {
@@ -53,7 +54,7 @@ public class RWScene : IDisposable
         vertexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer)); // 32 * const
         indexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.IndexBuffer)); // 4 * const
         
-        shadowDataBuffer = factory.CreateBuffer(new BufferDescription(96 /*size of shadow uniform*/, BufferUsage.UniformBuffer));
+        shadowDataBuffer = factory.CreateBuffer(new BufferDescription(112 /*size of shadow uniform*/, BufferUsage.UniformBuffer));
 
         shadowDataSet = factory.CreateResourceSet(
             new ResourceSetDescription(
@@ -69,6 +70,7 @@ public class RWScene : IDisposable
         RecreatePipelines(factory);
 
         commandList = factory.CreateCommandList();
+        ShadowRepeat = 1;
     }
 
     public void Resize(uint width, uint height)
@@ -110,7 +112,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ObjectRender = GuiTexture.Create("rwscene_object_render", objectTarget);
+        ObjectRender = GuiTexture.Create("RWScene Object Texture", objectTarget);
 
         renderObjectStencil?.Dispose();
         renderObjectStencil = factory.CreateTexture(
@@ -140,16 +142,16 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ShadowRender = GuiTexture.Create("rwscene_shadow_render", shadowTarget);
+        ShadowRender = GuiTexture.Create("RWScene Shadow Texture", shadowTarget);
     }
 
     private void RecreatePipelines(ResourceFactory factory)
     {
         ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
-        ObjectFramebuffer.Name = "LIT FRAMEBUFFER";
+        ObjectFramebuffer.Name = "Object Framebuffer";
 
         shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
-        shadowFramebuffer.Name = "SHADOW FRAMEBUFFER";
+        shadowFramebuffer.Name = "Shadow Framebuffer";
 
         ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
         shadowPipeline = factory.CreateGraphicsPipeline(
@@ -163,7 +165,7 @@ public class RWScene : IDisposable
                 shadowFramebuffer.OutputDescription
             )
         );
-        shadowPipeline.Name = "SHADOW FRAMEBUFFER";
+        shadowPipeline.Name = "Shadow Pipeline";
 
         Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
@@ -203,7 +205,7 @@ public class RWScene : IDisposable
             0 => RgbaFloat.Clear,
             1 => RgbaFloat.White,
             2 => Program.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
-            _ => throw new ArgumentOutOfRangeException()
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
     }
 
@@ -213,21 +215,28 @@ public class RWScene : IDisposable
         commandList.ClearColorTarget(0, forceUnlit ? RgbaFloat.Black : RgbaFloat.Red);
         commandList.ClearDepthStencil(forceUnlit ? 0 : 1, 0);
 
-        foreach (RWRenderDescription desc in renderItems)
+        for (int r = 0; r < renderItems.Count; r++)
         {
-            commandList.UpdateBuffer(shadowDataBuffer, 0, desc.ShadowData);
+            RWRenderDescription desc = renderItems[r];
+            
+            for (int i = 0; i < ShadowRepeat; i++)
+            {
+                commandList.UpdateBuffer(shadowDataBuffer, 0, desc.ShadowData);
 
-            commandList.UpdateBuffer(vertexBuffer, 0, desc.Vertices);
-            commandList.UpdateBuffer(indexBuffer, 0, desc.Indices);
+                commandList.UpdateBuffer(vertexBuffer, 0, desc.Vertices);
+                commandList.UpdateBuffer(indexBuffer, 0, desc.Indices);
 
-            commandList.SetVertexBuffer(0, vertexBuffer);
-            commandList.SetIndexBuffer(indexBuffer, IndexFormat.UInt16);
+                commandList.SetVertexBuffer(0, vertexBuffer);
+                commandList.SetIndexBuffer(indexBuffer, IndexFormat.UInt16);
 
-            commandList.SetPipeline(shadowPipeline);
-            commandList.SetGraphicsResourceSet(0, shadowDataSet);
-            if (desc.HasTextureSet) commandList.SetGraphicsResourceSet(1, desc.TextureSet);
+                commandList.SetPipeline(shadowPipeline);
+                commandList.SetGraphicsResourceSet(0, shadowDataSet);
+                if (desc.HasTextureSet) commandList.SetGraphicsResourceSet(1, desc.TextureSet);
 
-            commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
+                commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
+
+                desc.ShadowData.RepeatCurrent++;
+            }
         }
     }
 
@@ -256,8 +265,8 @@ public class RWScene : IDisposable
     // Does a completely detached render
     private void TestRender()
     {
-        ShaderDescription testV = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.testVert.glsl"), "main", true);
-        ShaderDescription testF = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.testFrag.glsl"), "main", true);
+        ShaderDescription testV = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.test.vert"), "main", true);
+        ShaderDescription testF = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.test.frag"), "main", true);
         Shader[] shaders = graphicsDevice.ResourceFactory.CreateFromSpirv(testV, testF);
 
         Pipeline pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(

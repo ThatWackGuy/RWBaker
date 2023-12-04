@@ -68,15 +68,15 @@ public static class RWUtils
         );
 
         // SHADOWS
-        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.rwShVert.spv"), "main");
-        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.rwShFrag.spv"), "main");
-        Shader[] shaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
-        
-        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shaders);
+        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.shadow.vert"), "main");
+        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.shadow.frag"), "main");
+        Shader[] shadowShaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
+
+        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shadowShaders);
         
         // TILES
-        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.tileVert.spv"), "main");
-        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.tileFrag.spv"), "main");
+        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
+        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
         Shader[] TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
 
         TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, TileShaders);
