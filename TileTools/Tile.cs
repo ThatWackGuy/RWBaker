@@ -143,7 +143,14 @@ public class Tile : RWObject, IRWRenderable
             LogWarning($"Specs should not be empty! Specs couldn't be parsed on tile {Name}! Defaulting to empty.", ref log);
         }
         
-        if (specifications2[0] == "") specifications2 = Array.Empty<string>();
+        if (specifications2[0] == "")
+        {
+            specifications2 = Array.Empty<string>();
+        }
+        else
+        {
+            HasSpecs2 = true;
+        }
         
         foreach (string spec in specifications1)
         {

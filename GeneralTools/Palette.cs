@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using RWBaker.GraphicsTools;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;

@@ -443,15 +443,15 @@ public static class GuiManager
         io.DisplayFramebufferScale = scaleFactor;
         io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
     }
+    
+    private static ImGuiKey KeyToImGuiKeyShortcut(Key keyToConvert, Key startKey1, ImGuiKey startKey2)
+    {
+        int changeFromStart1 = (int)keyToConvert - (int)startKey1;
+        return startKey2 + changeFromStart1;
+    }
 
     private static bool TryMapKey(Key key, out ImGuiKey result)
     {
-        ImGuiKey KeyToImGuiKeyShortcut(Key keyToConvert, Key startKey1, ImGuiKey startKey2)
-        {
-            int changeFromStart1 = (int)keyToConvert - (int)startKey1;
-            return startKey2 + changeFromStart1;
-        }
-
         result = key switch
         {
             >= Key.F1 and <= Key.F12 => KeyToImGuiKeyShortcut(key, Key.F1, ImGuiKey.F1),
@@ -556,7 +556,7 @@ public static class GuiManager
 
         for (int i = 0; i < draw_data.CmdListsCount; i++)
         {
-            ImDrawListPtr cmd_list = draw_data.CmdListsRange[i];
+            ImDrawListPtr cmd_list = draw_data.CmdLists[i];
 
             cl.UpdateBuffer(
                 vertexBuffer,
@@ -599,7 +599,7 @@ public static class GuiManager
         int idxOffset = 0;
         for (int n = 0; n < draw_data.CmdListsCount; n++)
         {
-            ImDrawListPtr cmd_list = draw_data.CmdListsRange[n];
+            ImDrawListPtr cmd_list = draw_data.CmdLists[n];
             for (int cmd_i = 0; cmd_i < cmd_list.CmdBuffer.Size; cmd_i++)
             {
                 ImDrawCmdPtr cmd = cmd_list.CmdBuffer[cmd_i];
