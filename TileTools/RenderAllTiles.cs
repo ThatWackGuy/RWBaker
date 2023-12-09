@@ -1,24 +1,17 @@
 using System.IO;
 using ImGuiNET;
-using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
 
 namespace RWBaker.TileTools;
 
 public class RenderAllTiles : Window
 {
-    private readonly Context context;
-
     private RWScene scene;
     private Vector2Int renderOffset;
     private long renderTime;
     
     public RenderAllTiles() : base("Render Tiles", "render_tiles")
     {
-        Open = true;
-        
-        context = Context.GetContext();
-
         scene = new RWScene();
         renderOffset = Vector2Int.Zero;
         renderTime = 0;
@@ -28,7 +21,7 @@ public class RenderAllTiles : Window
     {
         Begin();
         ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
-        ImGui.TextDisabled($"Using Palette: {Palette.Current.Name}");
+        ImGui.TextDisabled($"Using Palette: {Program.CurrentPalette.Name}");
         ImGui.TextDisabled("Bulk renders always use the first variation of a tile!");
         ImGui.Separator();
         
@@ -46,7 +39,7 @@ public class RenderAllTiles : Window
 
             foreach (Tile tile in Program.Tiles)
             {
-                scene.ResizeTo(tile);
+                scene.Resize(tile);
                 scene.AddObject(tile);
                 scene.Render(context.TileUseUnlit);
                 
@@ -59,5 +52,10 @@ public class RenderAllTiles : Window
         ImGui.TextDisabled($"Render Time: {renderTime} ms.");
         
         ImGui.End();
+    }
+
+    protected override void Destroy()
+    {
+        scene.Dispose();
     }
 }

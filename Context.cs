@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Veldrid;
 
 namespace RWBaker;
@@ -11,128 +12,102 @@ namespace RWBaker;
 /// Loads data/userdata.json on startup, saves it back on close
 /// </summary>
 [Serializable]
-public class Context // Stripped down version of the full context class :3
+public class Context
 {
-    private static Context? instance;
-
-    // Serialized
+    private static JsonSerializerOptions JsonOptions = new()
+    {
+        AllowTrailingCommas = false,
+        IncludeFields = true,
+        WriteIndented = true
+    };
+    
+    // Window options
     public Vector2Int SavedWindowPos;
     public Vector2Int SavedWindowSize;
     public WindowState WindowState;
+    public bool VSync;
+    public bool GraphicsDebug;
     
-    public string SavedGraphicsDir = null!;
-    public string SavedPropsDir = null!;
-    public string SavedPaletteDir = null!;
+    // Paths
+    public string SavedGraphicsDir;
+    public string SavedPropsDir;
+    public string SavedPaletteDir;
     
-    public string UsingPalette1 = null!;
-    public string UsingPalette2 = null!;
+    // Last palette names
+    public string UsingPalette1;
+    public string UsingPalette2;
 
+    // Last palette percentages
     public int Palette1Percentage;
     public int Palette2Percentage;
 
-    public string TileLastSearched = null!;
-    public string TileLastUsed = null!;
+    // Last tile data
+    public string TileLastSearched;
+    public string TileLastUsed;
     public bool TileUseUnlit;
     public bool TileUseRain;
     public bool TileOutputToFile;
-    
-    public static Context GetContext()
+
+    /// <summary>
+    /// Loads the default options
+    /// </summary>
+    /// <remarks>
+    ///  Before creating a new context consider Program.<see cref="Program.Context"/>
+    /// </remarks>
+    [JsonConstructor]
+    public Context()
     {
-        if (instance is null)
-        {
-            throw new NullReferenceException("Context is not instanced!");
-        }
-
-        return instance;
-    }
-
-    private static Context LoadDefaultContext()
-    {
-        return new Context
-        {
-            SavedWindowPos = new Vector2Int(20, 20),
-            SavedWindowSize = new Vector2Int(500, 500),
-            WindowState = WindowState.Normal,
-            SavedGraphicsDir = "",
-            SavedPropsDir = "",
-            SavedPaletteDir = "",
-            UsingPalette1 = "DEFAULT",
-            UsingPalette2 = "DEFAULT",
-            Palette1Percentage = 100,
-            Palette2Percentage = 0,
-            TileLastSearched = "",
-            TileLastUsed = "",
-            TileUseUnlit = false,
-            TileUseRain = false,
-            TileOutputToFile = false
-        };
-    }
-
-    public static void LoadContext()
-    {
-        // Create the userdata file if it doesn't exist
-        if (!File.Exists("./userdata.json")) File.Create("./userdata.json").Close();
-
-        bool failedLoading = false;
-        Exception? exception = null;
+        SavedWindowPos = new Vector2Int(20, 20);
+        SavedWindowSize = new Vector2Int(500, 500);
+        WindowState = WindowState.Normal;
+        VSync = false;
+        GraphicsDebug = false;
         
-        try
-        {
-            Context? loadedContext = JsonSerializer.Deserialize<Context>(
-                File.ReadAllText("./userdata.json"),
-                new JsonSerializerOptions
-                {
-                    AllowTrailingCommas = false,
-                    IncludeFields = true,
-                    WriteIndented = true
-                }
-            );
-
-            if (loadedContext is null)
-            {
-                failedLoading = true;
-            }
-            else
-            {
-                instance = loadedContext;
-            }
-        }
-        catch (Exception e)
-        {
-            failedLoading = true;
-            exception = e;
-        }
-
-        if (failedLoading)
-        {
-            instance = LoadDefaultContext();
-            Console.WriteLine(
-                exception is null
-                ? "An error occured while parsing userdata"
-                : $"An error occured while parsing userdata:\n\t{exception}"
-            ); 
-        }
-
-        SaveContext();
-    }
-    
-    public static void SaveContext()
-    {
-        if (instance is null)
-        {
-            throw new NullReferenceException("Context is not instanced!");
-        }
+        SavedGraphicsDir = "";
+        SavedPropsDir = "";
+        SavedPaletteDir = "";
         
+        UsingPalette1 = "";
+        UsingPalette2 = "";
+        
+        Palette1Percentage = 100;
+        Palette2Percentage = 0;
+        
+        TileLastSearched = "";
+        TileLastUsed = "";
+        TileUseUnlit = false;
+        TileUseRain = false;
+        TileOutputToFile = false;
+    }
+
+    /// <summary>
+    /// returns a new context from the given json file path
+    /// </summary>
+    /// <remarks>
+    ///  Before creating a new context consider Program.<see cref="Program.Context"/>
+    /// </remarks>
+    public static Context Load(string path)
+    {
+        Context? loaded = JsonSerializer.Deserialize<Context>(
+            File.ReadAllText(path),
+            JsonOptions
+        );
+
+        if (loaded is null)
+        {
+            throw new JsonException($"An error occured while parsing userdata!\nPlease check {path}");
+        }
+
+        return loaded;
+    }
+
+    public void Save(string path)
+    {
         File.WriteAllText(
-            "./userdata.json",
+            path,
             JsonSerializer.Serialize(
-                instance,
-                new JsonSerializerOptions
-                {
-                    AllowTrailingCommas = false,
-                    IncludeFields = true,
-                    WriteIndented = true
-                }
+                this,
+                JsonOptions
             )
         );
     }

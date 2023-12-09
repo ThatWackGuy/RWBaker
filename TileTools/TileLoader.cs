@@ -1,23 +1,13 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Numerics;
-using System.Text.RegularExpressions;
 using ImGuiNET;
 
 namespace RWBaker.TileTools;
 
 public class TileLoader : Window
 {
-    private readonly Context context;
-    
     private string getTilesLog;
     
     public TileLoader() : base("RW Graphics Parser", "rw-baker-parser")
     {
-        Open = true;
-
-        context = Context.GetContext();
-
         getTilesLog = "";
     }
     
@@ -30,7 +20,7 @@ public class TileLoader : Window
         if (ImGui.Button("Get Tiles"))
         {
             Program.Tiles.Clear();
-            RWUtils.GetTiles(out getTilesLog);
+            RWUtils.GetTiles(context, out getTilesLog);
         }
         
         foreach (string ln in getTilesLog.Split("\n"))
@@ -38,5 +28,10 @@ public class TileLoader : Window
             if (ln == "") continue;
             ImGui.TextDisabled(ln);
         }
+    }
+
+    protected override void Destroy()
+    {
+        
     }
 }

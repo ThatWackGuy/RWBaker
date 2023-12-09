@@ -1,4 +1,6 @@
+using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
@@ -87,5 +89,32 @@ public static class ImageUtils
         Image<Rgba32> newImage = new(int.Max(originImage.Width, newWidth), int.Max(originImage.Height, newHeight));
         originImage.CopyArea(newImage, Vector2Int.Zero, Vector2Int.Zero, originImage.IntSize());
         originImage = newImage;
+    }
+
+    public static Image<Rgba32> ToImage(GraphicsDevice device, Texture texture)
+    {
+        if (texture.Format != PixelFormat.R8_G8_B8_A8_UNorm) throw new ArgumentException("Texture must use R8_G8_B8_A8_UNorm format!");
+        if ((texture.Usage & TextureUsage.Staging) == 0) throw new ArgumentException("Only staging textures may be converted to images!");
+
+        var map = device.Map(texture, MapMode.Read);
+
+        unsafe
+        {
+            byte* src = (byte*)map.Data;
+            byte[] dst = new byte[texture.Width * texture.Height * sizeof(Rgba32)];
+            byte* end = src + map.SizeInBytes;
+
+            int y = 0;
+            while (src < end)
+            {
+                Marshal.Copy((IntPtr)src, dst, y * (int)texture.Width * 4, (int)texture.Width * 4);
+                src += map.RowPitch;
+                y++;
+            }
+
+            device.Unmap(texture);
+
+            return Image.LoadPixelData<Rgba32>(dst, (int)texture.Width, (int)texture.Height);
+        }
     }
 }

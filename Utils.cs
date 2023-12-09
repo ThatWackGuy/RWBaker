@@ -1,10 +1,10 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using ImGuiNET;
 using System.Runtime.InteropServices;
 using RWBaker.GeneralTools;
+using RWBaker.GraphicsTools;
 using RWBaker.TileTools;
 using Veldrid;
 
@@ -38,13 +38,6 @@ public static class Utils
         return bytes;
     }
 
-    public static void TryAddWindow<T>(T window) where T : Window
-    {
-        if (Program.Windows.Any(w => w is T)) return;
-        
-        Program.WindowAdd.Add(window);
-    }
-
     public static void Nav()
     {
         if (!ImGui.BeginMainMenuBar()) return;
@@ -53,7 +46,7 @@ public static class Utils
         {
             if (ImGui.MenuItem("Get Tiles"))
             {
-                TryAddWindow(new TileLoader());
+                GuiManager.AddWindow(new TileLoader());
             }
             
             if (ImGui.MenuItem("Get Props"))
@@ -63,7 +56,7 @@ public static class Utils
             
             if (ImGui.MenuItem("Select Palettes"))
             {
-                TryAddWindow(new PalettePicker());
+                GuiManager.AddWindow(new PalettePicker());
             }
 
             ImGui.EndMenu();
@@ -73,12 +66,12 @@ public static class Utils
         {
             if (ImGui.MenuItem("Render Single Tile"))
             {
-                TryAddWindow(new RenderSingleTiles());
+                GuiManager.AddWindow(new RenderSingleTiles());
             }
             
             if (ImGui.MenuItem("Render All Tiles"))
             {
-                TryAddWindow(new RenderAllTiles());
+                GuiManager.AddWindow(new RenderAllTiles());
             }
 
             ImGui.EndMenu();
@@ -93,17 +86,17 @@ public static class Utils
         {
             if (ImGui.MenuItem("RWBaker Info"))
             {
-                TryAddWindow(new InfoWindow());
+                GuiManager.AddWindow(new InfoWindow());
             }
             
             if (ImGui.MenuItem("ImGui Info"))
             {
-                TryAddWindow(new ImGuiInfoWindow());
+                GuiManager.AddWindow(new ImGuiInfoWindow());
             }
             
             if (ImGui.MenuItem("Credits"))
             {
-                TryAddWindow(new CreditsWindow());
+                GuiManager.AddWindow(new CreditsWindow());
             }
             
             ImGui.EndMenu();

@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
@@ -58,68 +58,57 @@ public enum TileTag
 
 public class Tile : RWObject, IRWRenderable
 {
-    [JsonInclude]
     public readonly string Category;
     
-    [JsonIgnore]
     public readonly Vector3 CategoryColor;
     
-    [JsonInclude]
     public readonly string CategoryColorSer;
     
-    [JsonInclude]
     public readonly string Name;
     
-    [JsonInclude]
+    public readonly string ProperName;
+    
     public readonly Vector2Int Size;
 
-    [JsonIgnore]
     public readonly int[,,] Specifications;
+
+    public readonly bool HasSpecs2;
     
-    [JsonInclude]
-    public readonly int[] SpecificationsFlattened;
-    
-    [JsonInclude]
     public readonly TileType Type;
     
-    [JsonInclude]
     public readonly int[] RepeatLayers;
 
-    [JsonInclude]
     public readonly int BufferTiles;
     
-    [JsonInclude]
     public readonly int Variants;
     
-    [JsonInclude]
     public readonly int PtPos; // ????
     
-    [JsonIgnore]
     public readonly TileTag[] Tags;
     
-    [JsonInclude]
-    public string[] TagsString => Tags.Select(t => $"{t}").ToArray();
-
-    [JsonIgnore]
-    public string FullName => $"{Category}_{Name}";
-    
-    [JsonIgnore]
-    public string ProperName => $"{Category} - {Name}";
-
     // Render variables
-    [JsonIgnore] public Texture? CachedTexture;
+    public Texture? CachedTexture;
     
-    [JsonIgnore] private readonly int[] renderRepeatLayers;
+    private readonly int[] renderRepeatLayers;
     
-    [JsonIgnore] public Vector2Int PixelSize => Size * 20 + BufferTiles * 40;
-    
-    [JsonIgnore] private int renderVariation;
-    
-    [JsonIgnore] public bool UseRainPalette;
-    
-    public Tile()
+    public Vector2Int PixelSize => Size * 20 + BufferTiles * 40;
+
+    private int _renderVariation;
+    public int RenderVariation
     {
+        get => _renderVariation;
+
+        set => _renderVariation = int.Clamp(value, 0, Variants - 1);
+    }
+    
+    public bool UseRainPalette;
+
+    private int _renderLayer;
+    public int RenderLayer
+    {
+        get => _renderLayer;
         
+        set => _renderLayer = int.Clamp(value, 0, HasSpecs2 ? 1 : 2);
     }
 
     public Tile(string line, string category, Vector3 categoryColor, ref string log)
@@ -131,6 +120,7 @@ public class Tile : RWObject, IRWRenderable
         
         // NAME
         Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
+        ProperName = $"{Category} - {Name}";
 
         // SIZE
         Match sizeStr = Regex.Match(line, @"#sz *: *point\( *([0-9]+) *, *([0-9]+) *\)");
@@ -153,7 +143,14 @@ public class Tile : RWObject, IRWRenderable
             LogWarning($"Specs should not be empty! Specs couldn't be parsed on tile {Name}! Defaulting to empty.", ref log);
         }
         
-        if (specifications2[0] == "") specifications2 = Array.Empty<string>();
+        if (specifications2[0] == "")
+        {
+            specifications2 = Array.Empty<string>();
+        }
+        else
+        {
+            HasSpecs2 = true;
+        }
         
         foreach (string spec in specifications1)
         {
@@ -178,25 +175,6 @@ public class Tile : RWObject, IRWRenderable
             if (x < sizeX) continue;
             x = 0;
             y++;
-        }
-
-        // Flatten for serialization
-        x = 0;
-        y = 0;
-        int z = 0;
-        SpecificationsFlattened = new int[Specifications.LongLength];
-        for (int i = 0; i < SpecificationsFlattened.Length; i++)
-        {
-            SpecificationsFlattened[i] = Specifications[x, y, z];
-            
-            x++;
-            if (x < sizeX) continue;
-            x = 0;
-            y++;
-
-            if (y < sizeY) continue;
-            y = 0;
-            z++;
         }
 
         // TILE TYPE
@@ -286,50 +264,7 @@ public class Tile : RWObject, IRWRenderable
             Tags[i] = tag;
         }
     }
-
-    public (int[], int[]) CollapseSpecs(ref string log)
-    {
-        if (Specifications.LongLength % 2 != 0)
-        {
-            log += $"Specs of {Name} either do not match up or the tile size is wrong! Please check your specs!\n";
-            return (Array.Empty<int>(), Array.Empty<int>());
-        }
-        
-        int x = 0;
-        int y = 0;
-        int [] specs1 = new int[Specifications.LongLength / 2];
-        for (int i = 0; i < specs1.Length; i++)
-        {
-            specs1[i] = Specifications[x, y, 0];
-            
-            x++;
-            if (x < Size.X) continue;
-            x = 0;
-            y++;
-
-            if (y < Size.Y) continue;
-            y = 0;
-        }
-
-        x = 0;
-        y = 0;
-        int [] specs2 = new int[Specifications.LongLength / 2];
-        for (int i = 0; i < specs2.Length; i++)
-        {
-            specs2[i] = Specifications[x, y, 1];
-            
-            x++;
-            if (x < Size.X) continue;
-            x = 0;
-            y++;
-
-            if (y < Size.Y) continue;
-            y = 0;
-        }
-
-        return (specs1, specs2);
-    }
-
+    
     public RWRenderDescription GetSceneInfo(RWScene scene)
     {
         return Type switch
@@ -342,9 +277,9 @@ public class Tile : RWObject, IRWRenderable
 
     public DeviceBuffer CreateObjectData(RWScene scene)
     {
-        DeviceBuffer buffer = Graphics.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
+        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
         
-        Graphics.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
+        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
 
         return buffer;
     }
@@ -353,18 +288,18 @@ public class Tile : RWObject, IRWRenderable
 
     public int LayerCount() => renderRepeatLayers.Sum();
 
-    public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (renderRepeatLayers.Length - 1) * Vector2.Abs(scene.ObjectOffset);
+    public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (LayerCount() - 1) * Vector2.Abs(scene.ObjectOffset);
 
     public Vector2 GetTextureSize() => new(CachedTexture!.Width, CachedTexture!.Height);
     
     public bool GetTextureSet(RWScene scene, [MaybeNullWhen(false)] out ResourceSet textureSet)
     {
-        textureSet = Graphics.ResourceFactory.CreateResourceSet(
+        textureSet = GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture!,
-                Palette.Current.DisplayTex.VTex,
-                scene.RenderShadowSampled
+                Program.CurrentPalette.DisplayTex.Texture,
+                scene.ShadowRender.Texture
             )
         );
 
@@ -373,7 +308,7 @@ public class Tile : RWObject, IRWRenderable
 
     private RWRenderDescription VoxelInfo(RWScene scene)
     {
-        if (CachedTexture == null) throw new NullReferenceException("WHERES THE TILE TEXTURE");
+        if (CachedTexture == null) throw new NullReferenceException("Cached tile texture does not exist");
 
         int layerCount = renderRepeatLayers.Sum();
         var vertices = new RWVertexData[layerCount * 4];
@@ -381,22 +316,17 @@ public class Tile : RWObject, IRWRenderable
         
         int vertIndex = 0;
         int indexIndex = 0;
+        int renderLayer = 0;
         for (int imgLayer = 0; imgLayer < renderRepeatLayers.Length; imgLayer++)
         {
             if (renderRepeatLayers[imgLayer] == 0) continue;
 
             // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer;
-            Vector2 texPos = new(PixelSize.X * renderVariation,  imgLayer * PixelSize.Y);
+            Vector2 texPos = new(PixelSize.X * RenderVariation,  imgLayer * PixelSize.Y);
             Vector2 texSize = (Vector2)PixelSize;
             
             for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
             {
-                // TODO: FIX REPEATS
-                // each layer need to be equally offset from other layers
-                // both shaders work on the assumption that tile layers do not repeat
-                // find a way to minimise data AND properly stack each layer
-                float renderLayer = 1 + imgLayer + repeat;
-
                 vertices[vertIndex] = new RWVertexData(
                     new Vector3(Vector2.Zero, renderLayer),
                     texPos,
@@ -431,6 +361,7 @@ public class Tile : RWObject, IRWRenderable
                 
                 vertIndex += 4;
                 indexIndex += 6;
+                renderLayer++;
             }
         }
 
@@ -443,5 +374,11 @@ public class Tile : RWObject, IRWRenderable
         throw new NotImplementedException();
     }
 
-    public void Variation(int var) => renderVariation = int.Clamp(var, 0, Variants - 1);
+    public void CacheTexture(Context context)
+    {
+        if (File.Exists(context.SavedGraphicsDir + "/" + Name + ".png"))
+        {
+            CachedTexture = GuiManager.TextureFromImage(context.SavedGraphicsDir + "/" + Name + ".png");
+        }
+    }
 }

@@ -28,6 +28,8 @@ public struct RWShadowRenderUniform
     public readonly Vector2 ObjectOffset;
     public readonly Vector2 TexSize;
     public readonly int LayerCount;
+    public float RepeatCurrent;
+    public readonly float RepeatMax;
 
     public RWShadowRenderUniform(RWScene scene, IRWRenderable renderable)
     {
@@ -36,6 +38,8 @@ public struct RWShadowRenderUniform
         ObjectOffset = scene.ObjectOffset;
         TexSize = renderable.GetTextureSize();
         LayerCount = renderable.LayerCount();
+        RepeatCurrent = 0;
+        RepeatMax = scene.ShadowRepeat;
     }
 }
 
@@ -48,6 +52,7 @@ public struct RWTileRenderUniform
     public readonly Vector2 ShTexSize;
     public readonly bool UseRainPalette;
     public readonly int LayerCount;
+    public readonly int PaletteLayer;
 
     public RWTileRenderUniform(RWScene scene, Tile tile)
     {
@@ -57,5 +62,6 @@ public struct RWTileRenderUniform
         ShTexSize = new Vector2(scene.Width, scene.Height);
         UseRainPalette = tile.UseRainPalette;
         LayerCount = tile.LayerCount();
+        PaletteLayer = tile.RenderLayer;
     }
 }

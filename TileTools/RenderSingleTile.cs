@@ -1,23 +1,14 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using ImGuiNET;
-using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using Veldrid;
 
 namespace RWBaker.TileTools;
 
 public class RenderSingleTiles : Window
 {
-    private readonly Context context;
-    
     private Vector2 renderOffset;
     private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)tile.PixelSize;
     private Vector2 lightOffset;
@@ -27,21 +18,17 @@ public class RenderSingleTiles : Window
     private Tile tile;
     private int variation;
     private int background;
-    private Tex2D render;
-    private Tex2D shadowRender;
-    private byte[] lastRenderBytes;
-    private bool awaitUpdate;
+    private int layer;
+    private bool needsRerender;
+    private bool sceneSizeChanged;
     private long renderTime;
     private float sizing;
+    private int shadowRepeat;
 
     private readonly Vector4 rectOutlineCol;
     
     public RenderSingleTiles() : base("Render Tile", "render_tile")
     {
-        Open = true;
-    
-        context = Context.GetContext();
-    
         renderOffset = Vector2.Zero;
         lightOffset = Vector2.Zero;
 
@@ -55,56 +42,52 @@ public class RenderSingleTiles : Window
         }
     
         scene = new RWScene();
-        scene.ResizeTo(tile);
-    
-        tile.CachedTexture = Graphics.TextureFromImage(context.SavedGraphicsDir + "/" + tile.Name + ".png");
+
+        tile.CacheTexture(context);
 
         variation = 0;
 
-        lastRenderBytes = Array.Empty<byte>();
-        awaitUpdate = true;
+        needsRerender = true;
+        sceneSizeChanged = true;
     
         renderTime = 0;
 
         sizing = 1;
+        shadowRepeat = 10;
 
         unsafe { rectOutlineCol = *ImGui.GetStyleColorVec4(ImGuiCol.Border); }
     }
 
+    private void ReRender()
+    {
+        if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
+        if (tile.CachedTexture is null) return;
+            
+        Stopwatch time = Stopwatch.StartNew();
+
+        tile.RenderVariation = variation;
+        tile.UseRainPalette = context.TileUseRain;
+        tile.RenderLayer = layer;
+
+        if (sceneSizeChanged)
+        {
+            scene.Resize(tile);
+        }
+
+        scene.ShadowRepeat = shadowRepeat;
+        scene.SetBackground(background, context.TileUseRain);
+        scene.AddObject(tile);
+        scene.Render(context.TileUseUnlit);
+
+        needsRerender = false;
+        sceneSizeChanged = false;
+
+        renderTime = time.ElapsedMilliseconds;
+    }
+    
     public override void Update()
     {
-        if (awaitUpdate)
-        {
-            if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
-        
-            if (lastRenderBytes.Length > 0)
-            {
-                Graphics.DeleteImGuiTexture(render);
-                Graphics.DeleteImGuiTexture(shadowRender);
-                render.Dispose();
-                shadowRender.Dispose();
-            }
-
-            Stopwatch time = Stopwatch.StartNew();
-
-            tile.Variation(variation);
-            tile.UseRainPalette = context.TileUseRain;
-            
-            scene.SetBackground(background, context.TileUseRain);
-            scene.AddObject(tile);
-            scene.Render(context.TileUseUnlit);
-            
-            MappedResource mapped = scene.GetTexData();
-            lastRenderBytes = new byte[mapped.SizeInBytes];
-            Marshal.Copy(mapped.Data, lastRenderBytes, 0, (int)mapped.SizeInBytes);
-
-            Graphics.TryCreateImGuiTexture(tile.FullName, scene.GetTex(), out render);
-            Graphics.TryCreateImGuiTexture(tile.FullName + "_SH", scene.RenderShadowSampled, out shadowRender);
-        
-            awaitUpdate = false;
-
-            renderTime = time.ElapsedMilliseconds;
-        }
+        if (needsRerender) ReRender();
 
         base.Update();
     }
@@ -112,10 +95,7 @@ public class RenderSingleTiles : Window
     protected override void Draw()
     {
         Begin();
-        ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
-        ImGui.TextDisabled($"Using Palette: {Palette.Current.Name}");
-        ImGui.Separator();
-
+        
         if (Program.Tiles.Count == 0)
         {
             ImGui.Text("NO TILES FOUND!");
@@ -123,34 +103,42 @@ public class RenderSingleTiles : Window
             return;
         }
         
-        ImGui.SliderFloat("Render sizing multiplier", ref sizing, 0, 8);
-
+        ImGui.TextDisabled(context.SavedGraphicsDir);
+        ImGui.TextDisabled(Program.CurrentPalette.Name);
+        
         ImGui.Separator();
-
+        
         ImGui.InputTextWithHint("Search", "Type Words To Search", ref context.TileLastSearched, 280);
         
         if (ImGui.BeginCombo("##tile_picker", tile.ProperName))
         {
             foreach (Tile t in Program.Tiles.Where(t => t.ProperName.Contains(context.TileLastSearched)))
             {
+                if (t.WarningGenerated)
+                {
+                    Utils.InfoMarker($"Warnings have been generated:\n{t.Warnings}");
+                    ImGui.SameLine();
+                }
+                
                 // TODO: Add category color?
-                if (ImGui.Selectable(t.WarningGenerated ? $"[!] {t.ProperName}" : t.ProperName))
+                if (ImGui.Selectable(t.ProperName, t.ProperName == tile.ProperName))
                 {
                     tile.CachedTexture?.Dispose(); // Dispose of the last tile's texture
                     tile = t;
-                    tile.CachedTexture = Graphics.TextureFromImage(context.SavedGraphicsDir + "/" + tile.Name + ".png");
-                    awaitUpdate = true;
+                    tile.CacheTexture(context);
+                    needsRerender = true;
                     context.TileLastUsed = tile.ProperName;
                 }
-
-                if (!t.WarningGenerated) continue;
-                if (!ImGui.IsItemHovered()) continue;
-                if (!ImGui.BeginTooltip()) continue;
-                ImGui.TextDisabled($"Warnings have been generated:\n{t.Warnings}");
-                ImGui.EndTooltip();
             }
 
             ImGui.EndCombo();
+        }
+        
+        if (tile.CachedTexture is null)
+        {
+            ImGui.Text("TILE TEXTURE DOES NOT EXIST!");
+            ImGui.End();
+            return;
         }
 
         ImGui.Spacing();
@@ -189,15 +177,27 @@ public class RenderSingleTiles : Window
         
         ImGui.Spacing();
         ImGui.Spacing();
+
+        int ly = layer;
+        ImGui.SliderInt("Layer", ref layer, 0, tile.HasSpecs2 ? 1 : 2);
         
-        if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) awaitUpdate = true;
-        if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) awaitUpdate = true;
+        ImGui.Spacing();
+        ImGui.Spacing();
+        
+        int sr = shadowRepeat;
+        ImGui.SliderInt("Shadow Repeat", ref shadowRepeat, 1, 40);
+        
+        ImGui.Spacing();
+        ImGui.Spacing();
+        
+        if (ImGui.Checkbox("Use Unlit Palette", ref context.TileUseUnlit)) needsRerender = true;
+        if (ImGui.Checkbox("Use Rain Palette", ref context.TileUseRain)) needsRerender = true;
         
         Vector2Int rSize = tile.GetRenderSize(scene);
         if (rSize.X != scene.Width || rSize.Y != scene.Height)
         {
-            scene.ResizeTo(tile);
-            awaitUpdate = true;
+            sceneSizeChanged = true;
+            needsRerender = true;
         }
 
         if (perRenderOffset != scene.ObjectOffset || perLightOffset != scene.LightOffset)
@@ -205,26 +205,40 @@ public class RenderSingleTiles : Window
             scene.ObjectOffset = perRenderOffset;
             scene.LightOffset = perLightOffset;
             
-            awaitUpdate = true;
+            needsRerender = true;
         }
 
-        if (bg != background || vars != variation) awaitUpdate = true;
+        if (bg != background || vars != variation || ly != layer || sr != shadowRepeat) needsRerender = true;
 
         ImGui.Separator();
 
-        ImGui.Image(render.Handle, render.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
-        ImGui.Image(shadowRender.Handle, shadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        if (ImGui.Button("Reset sizing"))
+        {
+            sizing = 1;
+        }
         
-        ImGui.TextDisabled($"RENDER TIME: {renderTime} ms.");
+        ImGui.SameLine();
+        
+        ImGui.SliderFloat("Render sizing", ref sizing, 0, 8);
         
         if (ImGui.Button("Save as Image"))
         {
-            Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
-            Image<Rgba32> img = Image.LoadPixelData<Rgba32>(Configuration.Default, lastRenderBytes, (int)scene.Width, (int)scene.Height);
-            img.Save($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
-            img.Dispose();
+            Directory.CreateDirectory($"{context.SavedGraphicsDir}/RENDERED");
+            scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
         }
+
+        ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.SameLine();
+        ImGui.Image(scene.ShadowRender.Index, scene.ShadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         
+        ImGui.TextDisabled($"{renderTime} ms");
+
         ImGui.End();
+    }
+    
+    protected override void Destroy()
+    {
+        scene.Dispose();
+        tile.CachedTexture?.Dispose();
     }
 }

@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
 using RWBaker.PropTools;
 using RWBaker.TileTools;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -23,14 +28,14 @@ public static class RWUtils
 
     public static void LoadGraphicsResources()
     {
-        ResourceFactory factory = Graphics.ResourceFactory;
+        ResourceFactory factory = GuiManager.ResourceFactory;
         
         RWVertexLayout = new VertexLayoutDescription[]
         {
             new(
                 new VertexElementDescription(
                     "v_position",
-                    VertexElementSemantic.Position,
+                    VertexElementSemantic.TextureCoordinate,
                     VertexElementFormat.Float3
                 ), // 12 bytes
                 
@@ -42,7 +47,7 @@ public static class RWUtils
                 
                 new VertexElementDescription(
                     "v_color",
-                    VertexElementSemantic.Color,
+                    VertexElementSemantic.TextureCoordinate,
                     VertexElementFormat.Float4
                 ) // 16 bytes
             )
@@ -63,15 +68,15 @@ public static class RWUtils
         );
 
         // SHADOWS
-        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.rwShVert.spv"), "main");
-        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.rwShFrag.spv"), "main");
-        Shader[] shaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
-        
-        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shaders);
+        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.shadow.vert"), "main");
+        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.shadow.frag"), "main");
+        Shader[] shadowShaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
+
+        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shadowShaders);
         
         // TILES
-        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.tileVert.spv"), "main");
-        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.tileFrag.spv"), "main");
+        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
+        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
         Shader[] TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
 
         TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, TileShaders);
@@ -158,10 +163,102 @@ public static class RWUtils
         array = new[] { 0 };
         return false;
     }
-
-    public static void GetTiles(out string log)
+    
+    public static void GetPalettes(Context context)
     {
-        Context context = Context.GetContext();
+        if (context.SavedPaletteDir == "") return;
+    
+        foreach (Palette palette in Program.Palettes)
+        {
+            palette.DisplayTex.Dispose();
+        }
+        
+        Program.Palettes.Clear();
+
+        foreach (string file in Directory.EnumerateFiles(context.SavedPaletteDir))
+        {
+            if (Path.GetExtension(file) != ".png") continue;
+            
+            string fileName = Path.GetFileNameWithoutExtension(file);
+            
+            if (!fileName.StartsWith("palette")) continue;
+
+            Image<Rgba32> image = Image.Load<Rgba32>(file);
+            Palette palette = new(image, fileName);
+            
+            Program.Palettes.Add(palette);
+        }
+    }
+    
+    public static void PaletteCheck(Context context)
+    {
+        try
+        {
+            List<Palette> Palettes = Program.Palettes;
+            Palette default0 = default;
+            Palette A;
+            Palette B;
+            
+            if (context.UsingPalette1 == "" || context.UsingPalette2 == "")
+            {
+                default0 = new Palette(Image.Load<Rgba32>(Utils.GetEmbeddedBytes("res.palette0.png")), "DEFAULT_0");
+            }
+            
+            if (context.UsingPalette1 == "" && context.UsingPalette2 == "")
+            {
+                Program.PaletteA = default0;
+                Program.PaletteB = default0;
+                Program.CurrentPalette = default0;
+                return;
+            }
+
+            if (context.UsingPalette1 == "")
+            {
+                A = default0;
+            }
+            else
+            {
+                A = Program.Palettes.Any(p => p.Name == context.UsingPalette1) 
+                    ? Palettes.First(p => p.Name == context.UsingPalette1)
+                    : new Palette(Image.Load<Rgba32>(Utils.GetEmbeddedBytes("res.palette0.png")), "UNKNOWN_0");
+            }
+
+            if (context.UsingPalette2 == "")
+            {
+                B = default0;
+            }
+            else
+            {
+                B = Palettes.Any(p => p.Name == context.UsingPalette2)
+                    ? Palettes.First(p => p.Name == context.UsingPalette2)
+                    : new Palette(Image.Load<Rgba32>(Utils.GetEmbeddedBytes("res.palette0.png")), "UNKNOWN_0");
+            }
+
+            Program.PaletteA = A;
+            Program.PaletteB = B;
+
+            if (context.Palette1Percentage == 100)
+            {
+                Program.CurrentPalette = A;
+                return;
+            }
+            
+            if (context.Palette2Percentage == 100)
+            {
+                Program.CurrentPalette = B;
+                return;
+            }
+            
+            Program.CurrentPalette = Palette.MixPalettes(A, B, context.Palette1Percentage, context.Palette2Percentage);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"ERROR WHILE LOADING PALETTES ON STARTUP:\n{e}");
+        }
+    }
+
+    public static void GetTiles(Context context, out string log)
+    {
         log = "";
 
         if (!Directory.Exists(context.SavedGraphicsDir))
@@ -187,9 +284,9 @@ public static class RWUtils
             if (Regex.IsMatch(line, "^\\s*$") || Regex.IsMatch(line, "^--\\w*\\n")) continue;
             
             // category definition
-            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
+            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\s*\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
             {
-                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
+                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\s*\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
                 lastCategory = categoryInfo[1].Value;
                 string[] colorsNums = categoryInfo[2].Value.Replace(" ", "").Split(',');
                 lastColor.X = int.Parse(colorsNums[0]);
@@ -198,18 +295,24 @@ public static class RWUtils
                 
                 continue;
             }
-            
-            // tile definition
-            Tile tile = new(line, lastCategory, lastColor, ref log);
-            Program.Tiles.Add(tile);
+
+            try
+            {
+                // tile definition
+                Tile tile = new(line, lastCategory, lastColor, ref log);
+                Program.Tiles.Add(tile);
+            }
+            catch (Exception e)
+            {
+                log += $"A problem occurred while parsing init line {line} :: {e}\n";
+            }
         }
 
         if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
     }
     
-    public static void GetProps(out string log)
+    public static void GetProps(Context context, out string log)
     {
-        Context context = Context.GetContext();
         log = "";
 
         if (!Directory.Exists(context.SavedPropsDir))
