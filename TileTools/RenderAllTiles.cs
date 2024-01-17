@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.IO;
 using ImGuiNET;
+using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
 
 namespace RWBaker.TileTools;
@@ -8,20 +10,20 @@ public class RenderAllTiles : Window
 {
     private RWScene scene;
     private Vector2Int renderOffset;
-    private long renderTime;
+    private Stopwatch renderTime;
     
     public RenderAllTiles() : base("Render Tiles", "render_tiles")
     {
         scene = new RWScene();
         renderOffset = Vector2Int.Zero;
-        renderTime = 0;
+        renderTime = new Stopwatch();
     }
 
     protected override void Draw()
     {
         Begin();
         ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
-        ImGui.TextDisabled($"Using Palette: {Program.CurrentPalette.Name}");
+        ImGui.TextDisabled($"Using Palette: {PaletteManager.CurrentPalette.Name}");
         ImGui.TextDisabled("Bulk renders always use the first variation of a tile!");
         ImGui.Separator();
         
@@ -32,24 +34,23 @@ public class RenderAllTiles : Window
 
         if (ImGui.Button("RENDER TILES"))
         {
-            bool saved = context.TileOutputToFile;
-            context.TileOutputToFile = true;
-            
-            Directory.CreateDirectory(context.SavedGraphicsDir + "/RENDERED/");
+            Directory.CreateDirectory(context.SavedGraphicsDir + "/Rendered/Bulk/");
 
+            renderTime.Restart();
             foreach (Tile tile in Program.Tiles)
             {
+                tile.CacheTexture(context);
                 scene.Resize(tile);
                 scene.AddObject(tile);
                 scene.Render(context.TileUseUnlit);
+                tile.DisposeTexture();
                 
-                if (context.TileOutputToFile) scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
+                scene.SaveToFile($"{context.SavedGraphicsDir}/Rendered/Bulk/{tile.Name}.png");
             }
-
-            context.TileOutputToFile = saved;
+            renderTime.Stop();
         }
         
-        ImGui.TextDisabled($"Render Time: {renderTime} ms.");
+        ImGui.TextDisabled($"Render Time: {renderTime.ElapsedMilliseconds} ms.");
         
         ImGui.End();
     }

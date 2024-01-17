@@ -6,9 +6,12 @@ layout(set = 0, binding = 0, std140) uniform RenderData
     vec2 vOffsetPerLayer; // object offset
     vec2 texSize;
     vec2 shTexSize;
+    vec2 tileSize;
+    int bfTiles;
     bool pRain;
     int layerCount;
     int palLayer;
+    bool isBox;
 } d;
 
 layout(location = 0) in vec3 v_position;

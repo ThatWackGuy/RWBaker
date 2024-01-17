@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Numerics;
 using System.Reflection;
 using ImGuiNET;
 using System.Runtime.InteropServices;
@@ -105,11 +106,41 @@ public static class Utils
         ImGui.EndMainMenuBar();
     }
 
+    public static void PushStyleColor(ImGuiCol id, int r, int g, int b)
+    {
+        unsafe
+        {
+            float textAlpha = ImGui.GetStyleColorVec4(id)->W;
+            ImGui.PushStyleColor(id, new Vector4(r / 255f, g / 255f, b / 255f, textAlpha));
+        }
+    }
+    
+    public static void PushStyleColor(ImGuiCol id, Vector3 col)
+    {
+        unsafe
+        {
+            float textAlpha = ImGui.GetStyleColorVec4(id)->W;
+            ImGui.PushStyleColor(id, new Vector4(col / 255, textAlpha));
+        }
+    }
+
     public static void InfoMarker(ReadOnlySpan<char> text)
     {
         ImGui.TextDisabled("[?]");
         if (!ImGui.BeginItemTooltip()) return;
         ImGui.Text(text);
+        ImGui.EndTooltip();
+    }
+    
+    public static void WarningMarker(ReadOnlySpan<char> text)
+    {
+        PushStyleColor(ImGuiCol.Text, 230, 128, 32);
+        ImGui.Text("[!]");
+        ImGui.PopStyleColor();
+        if (!ImGui.BeginItemTooltip()) return;
+        PushStyleColor(ImGuiCol.Text, 252, 207, 3);
+        ImGui.Text(text);
+        ImGui.PopStyleColor();
         ImGui.EndTooltip();
     }
 }

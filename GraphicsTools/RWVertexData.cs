@@ -19,6 +19,13 @@ public struct RWVertexData
         TexturePos = texturePos;
         Color = color;
     }
+    
+    public RWVertexData(float x, float y, float z, Vector2 texturePos, RgbaFloat color)
+    {
+        Position = new Vector3(x, y, z);
+        TexturePos = texturePos;
+        Color = color;
+    }
 
     public RWVertexData(Vector2 position)
     {

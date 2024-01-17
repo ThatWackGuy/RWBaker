@@ -6,17 +6,19 @@ using System.Numerics;
 using System.Text.RegularExpressions;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 
 namespace RWBaker.TileTools;
 
 public enum TileType
 {
-    VoxelStruct = 1,
-    VoxelStructRockType = 2,
-    VoxelStructRandomDisplaceHorizontal = 4,
-    VoxelStructRandomDisplaceVertical = 8,
-    Box = 16,
+    VoxelStruct,
+    VoxelStructRockType,
+    VoxelStructRandomDisplaceHorizontal,
+    VoxelStructRandomDisplaceVertical,
+    Box,
 }
 
 public enum TileTag
@@ -62,11 +64,11 @@ public class Tile : RWObject, IRWRenderable
     
     public readonly Vector3 CategoryColor;
     
-    public readonly string CategoryColorSer;
-    
     public readonly string Name;
     
-    public readonly string ProperName;
+    public readonly string ProperName; // Category - Name
+
+    public readonly string SearchName; // Category Name Type Tags Size [all lowercase]
     
     public readonly Vector2Int Size;
 
@@ -87,7 +89,7 @@ public class Tile : RWObject, IRWRenderable
     public readonly TileTag[] Tags;
     
     // Render variables
-    public Texture? CachedTexture;
+    public Texture? CachedTexture { get; private set; }
     
     private readonly int[] renderRepeatLayers;
     
@@ -116,7 +118,6 @@ public class Tile : RWObject, IRWRenderable
         // CATEGORY
         Category = category;
         CategoryColor = categoryColor;
-        CategoryColorSer = $"{categoryColor.X},{categoryColor.Y},{categoryColor.Z}";
         
         // NAME
         Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
@@ -189,9 +190,10 @@ public class Tile : RWObject, IRWRenderable
 
         if (!RWUtils.LingoIntArray(repeatLayers, out RepeatLayers))
         {
+            // Boxes take up the entire layer
             if (Type is TileType.VoxelStructRockType or TileType.Box)
             {
-                RepeatLayers = new[] { 1 };
+                RepeatLayers = new[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
             }
             else
             {
@@ -263,50 +265,12 @@ public class Tile : RWObject, IRWRenderable
             
             Tags[i] = tag;
         }
+        
+        // SEARCH NAME
+        SearchName = $"{Category} {Name} {Type} {string.Join(' ', Tags)} {sizeX}x{sizeY}".ToLower();
     }
     
     public RWRenderDescription GetSceneInfo(RWScene scene)
-    {
-        return Type switch
-        {
-            TileType.VoxelStruct or TileType.VoxelStructRockType or TileType.VoxelStructRandomDisplaceHorizontal or TileType.VoxelStructRandomDisplaceVertical => VoxelInfo(scene),
-            TileType.Box => BoxInfo(scene),
-            _ => throw new ArgumentOutOfRangeException()
-        };
-    }
-
-    public DeviceBuffer CreateObjectData(RWScene scene)
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
-        
-        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
-
-        return buffer;
-    }
-    
-    public ShaderSetDescription GetShaderSetDescription() => RWUtils.TileRendererShaderSet;
-
-    public int LayerCount() => renderRepeatLayers.Sum();
-
-    public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (LayerCount() - 1) * Vector2.Abs(scene.ObjectOffset);
-
-    public Vector2 GetTextureSize() => new(CachedTexture!.Width, CachedTexture!.Height);
-    
-    public bool GetTextureSet(RWScene scene, [MaybeNullWhen(false)] out ResourceSet textureSet)
-    {
-        textureSet = GuiManager.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.RWObjectTextureLayout,
-                CachedTexture!,
-                Program.CurrentPalette.DisplayTex.Texture,
-                scene.ShadowRender.Texture
-            )
-        );
-
-        return true;
-    }
-
-    private RWRenderDescription VoxelInfo(RWScene scene)
     {
         if (CachedTexture == null) throw new NullReferenceException("Cached tile texture does not exist");
 
@@ -321,9 +285,12 @@ public class Tile : RWObject, IRWRenderable
         {
             if (renderRepeatLayers[imgLayer] == 0) continue;
 
-            // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer;
-            Vector2 texPos = new(PixelSize.X * RenderVariation,  imgLayer * PixelSize.Y);
+            // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer
+            Vector2 texPos = Type == TileType.Box ? Vector2.Zero : new Vector2(PixelSize.X * RenderVariation,  1 + imgLayer * PixelSize.Y);
             Vector2 texSize = (Vector2)PixelSize;
+            
+            // box texture pos is calculated in-shader
+            // so assignment here means nothing
             
             for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
             {
@@ -368,17 +335,47 @@ public class Tile : RWObject, IRWRenderable
         return new RWRenderDescription(vertices, indices, this, scene);
     }
 
-    private RWRenderDescription BoxInfo(RWScene scene)
+    public DeviceBuffer CreateObjectData(RWScene scene)
     {
-        // TODO: TILE BOX RENDERING
-        throw new NotImplementedException();
+        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
+        
+        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
+
+        return buffer;
+    }
+    
+    public ShaderSetDescription GetShaderSetDescription() => RWUtils.TileRendererShaderSet;
+
+    public int LayerCount() => renderRepeatLayers.Sum();
+
+    public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (LayerCount() - 1) * Vector2.Abs(scene.ObjectOffset);
+
+    public Vector2 GetTextureSize() => new(CachedTexture!.Width, CachedTexture!.Height);
+    
+    public bool GetTextureSet(RWScene scene, [MaybeNullWhen(false)] out ResourceSet textureSet)
+    {
+        textureSet = GuiManager.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(
+                RWUtils.RWObjectTextureLayout,
+                CachedTexture,
+                PaletteManager.CurrentPalette.DisplayTex.Texture,
+                scene.ShadowRender.Texture
+            )
+        );
+
+        return true;
     }
 
     public void CacheTexture(Context context)
     {
-        if (File.Exists(context.SavedGraphicsDir + "/" + Name + ".png"))
-        {
-            CachedTexture = GuiManager.TextureFromImage(context.SavedGraphicsDir + "/" + Name + ".png");
-        }
+        if (!File.Exists(context.SavedGraphicsDir + "/" + Name + ".png")) throw new FileNotFoundException("File for ");
+        
+        CachedTexture = GuiManager.TextureFromImage(context.SavedGraphicsDir + "/" + Name + ".png");
+    }
+
+    public void DisposeTexture()
+    {
+        CachedTexture?.Dispose();
+        CachedTexture = null;
     }
 }

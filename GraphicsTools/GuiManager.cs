@@ -154,6 +154,8 @@ public static class GuiManager
             stopwatch.Restart();
             InputSnapshot snapshot = Window.PumpEvents();
             if (!Window.Exists) break;
+            
+            PaletteManager.Update();
 
             UpdateImGui(time, snapshot);
             Utils.Nav();
@@ -516,6 +518,7 @@ public static class GuiManager
         io.AddMouseButtonEvent(3, snapshot.IsMouseDown(MouseButton.Button1));
         io.AddMouseButtonEvent(4, snapshot.IsMouseDown(MouseButton.Button2));
         io.AddMouseWheelEvent(0f, snapshot.WheelDelta);
+
         foreach (char t in snapshot.KeyCharPresses)
         {
             io.AddInputCharacter(t);
@@ -583,7 +586,8 @@ public static class GuiManager
             io.DisplaySize.Y,
             0.0f,
             -1.0f,
-            1.0f);
+            1.0f
+        );
 
         GraphicsDevice.UpdateBuffer(projMatrixBuffer, 0, ref mvp);
 
@@ -621,7 +625,13 @@ public static class GuiManager
                     (uint)(cmd.ClipRect.W - cmd.ClipRect.Y)
                 );
 
-                cl.DrawIndexed(cmd.ElemCount, 1, cmd.IdxOffset + (uint)idxOffset, (int)cmd.VtxOffset + vtxOffset, 0);
+                cl.DrawIndexed(
+                    cmd.ElemCount,
+                    1,
+                    cmd.IdxOffset + (uint)idxOffset,
+                    (int)cmd.VtxOffset + vtxOffset,
+                    0
+                );
             }
             
             vtxOffset += cmd_list.VtxBuffer.Size;

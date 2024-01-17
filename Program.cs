@@ -17,11 +17,6 @@ public static class Program
     
     public static readonly List<Tile> Tiles = new();
     public static readonly List<Prop> Props = new();
-    
-    public static Palette PaletteA;
-    public static Palette PaletteB;
-    public static Palette CurrentPalette;
-    public static readonly List<Palette> Palettes = new();
 
     public static void Main()
     {
@@ -61,8 +56,8 @@ public static class Program
             Console.WriteLine($"TILE LOAD LOG:\n{tileLog}\n\n");
         }
         
-        RWUtils.GetPalettes(Context);
-        RWUtils.PaletteCheck(Context);
+        PaletteManager.Load(Context);
+        PaletteManager.PaletteCheck(Context);
         
         RWUtils.LoadGraphicsResources();
         

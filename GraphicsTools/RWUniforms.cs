@@ -50,9 +50,12 @@ public struct RWTileRenderUniform
     public readonly Vector2 Offset;
     public readonly Vector2 TexSize;
     public readonly Vector2 ShTexSize;
+    public readonly Vector2 TileSize;
+    public readonly int BufferTiles;
     public readonly bool UseRainPalette;
     public readonly int LayerCount;
     public readonly int PaletteLayer;
+    public readonly bool IsBox;
 
     public RWTileRenderUniform(RWScene scene, Tile tile)
     {
@@ -60,8 +63,11 @@ public struct RWTileRenderUniform
         Offset = scene.ObjectOffset;
         TexSize = tile.GetTextureSize();
         ShTexSize = new Vector2(scene.Width, scene.Height);
+        TileSize = (Vector2)tile.Size;
+        BufferTiles = tile.BufferTiles;
         UseRainPalette = tile.UseRainPalette;
         LayerCount = tile.LayerCount();
         PaletteLayer = tile.RenderLayer;
+        IsBox = tile.Type == TileType.Box;
     }
 }

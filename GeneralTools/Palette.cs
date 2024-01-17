@@ -37,9 +37,8 @@ public struct Palette : IDisposable
     {
         if (aPercent == 100) return palA;
         if (bPercent == 100) return palB;
-        if (Program.CurrentPalette.Name == $"{aPercent} {palA.Name} + {bPercent} {palB.Name}") return Program.CurrentPalette;
-
-        if (Program.CurrentPalette.isMixed) Program.CurrentPalette.DisplayTex.Dispose();
+        if (PaletteManager.CurrentPalette.Name == $"{aPercent} {palA.Name} + {bPercent} {palB.Name}") return PaletteManager.CurrentPalette;
+        if (PaletteManager.CurrentPalette.isMixed) PaletteManager.CurrentPalette.DisplayTex.Dispose();
 
         return new Palette(palA, aPercent, palB, bPercent);
     }

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 
 namespace RWBaker.GraphicsTools;
@@ -66,6 +68,48 @@ public class GuiTexture : IDisposable
         _map.Add(_nextIndex, tex);
         _nextIndex++;
         return tex;
+    }
+    
+    public static GuiTexture CreateFromImage(string name, Image<Rgba32> image, ResourceLayout? textureLayout = null)
+    {
+        Texture texture = GuiManager.ResourceFactory.CreateTexture(
+            new TextureDescription(
+                (uint)image.Width,
+                (uint)image.Height,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Sampled,
+                TextureType.Texture2D
+            )
+        );
+        
+        GuiManager.UpdateTextureFromImage(texture, image);
+
+        return Create(name, texture, textureLayout);
+    }
+    
+    public static GuiTexture CreateFromImage(string name, string path, ResourceLayout? textureLayout = null)
+    {
+        Image<Rgba32> image = Image.Load<Rgba32>(path);
+
+        Texture texture = GuiManager.ResourceFactory.CreateTexture(
+            new TextureDescription(
+                (uint)image.Width,
+                (uint)image.Height,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Sampled,
+                TextureType.Texture2D
+            )
+        );
+        
+        GuiManager.UpdateTextureFromImage(texture, image);
+
+        return Create(name, texture, textureLayout);
     }
 
     public static GuiTexture GetTexture(IntPtr index)

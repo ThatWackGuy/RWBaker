@@ -204,7 +204,7 @@ public class RWScene : IDisposable
         {
             0 => RgbaFloat.Clear,
             1 => RgbaFloat.White,
-            2 => Program.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
+            2 => PaletteManager.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
     }

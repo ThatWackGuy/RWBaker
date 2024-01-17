@@ -10,7 +10,7 @@ public abstract class Window : IDisposable
     public readonly string InternalIdentifier;
     public bool Open;
     
-    protected Context context;
+    protected readonly Context context;
 
     protected Window(string displayName, string internalIdentifier)
     {

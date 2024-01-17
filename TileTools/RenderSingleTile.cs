@@ -1,8 +1,11 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 using ImGuiNET;
+using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
 
 namespace RWBaker.TileTools;
@@ -16,6 +19,7 @@ public class RenderSingleTiles : Window
 
     private readonly RWScene scene;
     private Tile tile;
+    private IEnumerable<Tile>? searchedTiles;
     private int variation;
     private int background;
     private int layer;
@@ -32,7 +36,7 @@ public class RenderSingleTiles : Window
         renderOffset = Vector2.Zero;
         lightOffset = Vector2.Zero;
 
-        if (context.TileLastUsed == "" || Program.Tiles.All(t => t.ProperName != context.TileLastUsed))
+        if (context.TileLastUsed == string.Empty || Program.Tiles.All(t => t.ProperName != context.TileLastUsed))
         {
             tile = Program.Tiles[0];
         }
@@ -40,6 +44,8 @@ public class RenderSingleTiles : Window
         {
             tile = Program.Tiles.First(t => t.ProperName == context.TileLastUsed);
         }
+
+        searchedTiles = null;
     
         scene = new RWScene();
 
@@ -87,7 +93,7 @@ public class RenderSingleTiles : Window
     
     public override void Update()
     {
-        if (needsRerender) ReRender();
+        if (needsRerender || PaletteManager.CurrentChanged) ReRender();
 
         base.Update();
     }
@@ -104,26 +110,33 @@ public class RenderSingleTiles : Window
         }
         
         ImGui.TextDisabled(context.SavedGraphicsDir);
-        ImGui.TextDisabled(Program.CurrentPalette.Name);
+        ImGui.TextDisabled(PaletteManager.CurrentPalette.Name);
         
         ImGui.Separator();
         
-        ImGui.InputTextWithHint("Search", "Type Words To Search", ref context.TileLastSearched, 280);
-        
-        if (ImGui.BeginCombo("##tile_picker", tile.ProperName))
+        if (ImGui.InputTextWithHint("Search", "Type Words To Search", ref context.TileLastSearched, 280) || searchedTiles == null)
         {
-            foreach (Tile t in Program.Tiles.Where(t => t.ProperName.Contains(context.TileLastSearched)))
+            searchedTiles = Program.Tiles.Where(t => t.SearchName.Contains(context.TileLastSearched, StringComparison.CurrentCultureIgnoreCase));
+        }
+        
+        if (ImGui.BeginCombo("##tile_picker", tile.ProperName) && searchedTiles != null)
+        {
+            foreach (Tile t in searchedTiles)
             {
+                Utils.PushStyleColor(ImGuiCol.Text, t.CategoryColor);
+                ImGui.Text("|");
+                ImGui.SameLine();
+                ImGui.PopStyleColor();
+                
                 if (t.WarningGenerated)
                 {
-                    Utils.InfoMarker($"Warnings have been generated:\n{t.Warnings}");
+                    Utils.WarningMarker(t.Warnings);
                     ImGui.SameLine();
                 }
                 
-                // TODO: Add category color?
                 if (ImGui.Selectable(t.ProperName, t.ProperName == tile.ProperName))
                 {
-                    tile.CachedTexture?.Dispose(); // Dispose of the last tile's texture
+                    tile.DisposeTexture(); // Dispose of the last tile's texture
                     tile = t;
                     tile.CacheTexture(context);
                     needsRerender = true;
@@ -223,8 +236,8 @@ public class RenderSingleTiles : Window
         
         if (ImGui.Button("Save as Image"))
         {
-            Directory.CreateDirectory($"{context.SavedGraphicsDir}/RENDERED");
-            scene.SaveToFile($"{context.SavedGraphicsDir}/RENDERED/{tile.Name}.png");
+            Directory.CreateDirectory($"{context.SavedGraphicsDir}/Rendered/");
+            scene.SaveToFile($"{context.SavedGraphicsDir}/Rendered/{tile.Name}.png");
         }
 
         ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
