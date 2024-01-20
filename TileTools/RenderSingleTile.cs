@@ -66,7 +66,6 @@ public class RenderSingleTiles : Window
 
     private void ReRender()
     {
-        if (!File.Exists($"{context.SavedGraphicsDir}/{tile.Name}.png")) return;
         if (tile.CachedTexture is null) return;
             
         Stopwatch time = Stopwatch.StartNew();
@@ -112,7 +111,7 @@ public class RenderSingleTiles : Window
         ImGui.TextDisabled(context.SavedGraphicsDir);
         ImGui.TextDisabled(PaletteManager.CurrentPalette.Name);
         
-        ImGui.Separator();
+        ImGui.SeparatorText("PARAMETERS");
         
         if (ImGui.InputTextWithHint("Search", "Type Words To Search", ref context.TileLastSearched, 280) || searchedTiles == null)
         {
@@ -223,7 +222,7 @@ public class RenderSingleTiles : Window
 
         if (bg != background || vars != variation || ly != layer || sr != shadowRepeat) needsRerender = true;
 
-        ImGui.Separator();
+        ImGui.SeparatorText("RENDER");
 
         if (ImGui.Button("Reset sizing"))
         {

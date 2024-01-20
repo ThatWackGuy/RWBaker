@@ -10,9 +10,12 @@ public struct RWRenderDescription : IDisposable
     public readonly ushort[] Indices;
     public readonly ResourceSet TextureSet;
     public readonly bool HasTextureSet;
+    
+    public readonly DeviceBuffer SceneDataBuffer;
     public readonly DeviceBuffer ObjectDataBuffer;
     public readonly ResourceSet ObjectData;
-    public RWShadowRenderUniform ShadowData;
+    
+    public RWSceneInfo SceneInfo;
     public readonly Pipeline Pipeline;
 
     public RWRenderDescription(RWVertexData[] vertices, ushort[] indices, IRWRenderable renderable, RWScene scene)
@@ -22,17 +25,19 @@ public struct RWRenderDescription : IDisposable
         
         HasTextureSet = renderable.GetTextureSet(scene, out ResourceSet? textureSet);
         TextureSet = textureSet!;
-        
+
+        SceneInfo = new RWSceneInfo(scene, renderable);
+        SceneDataBuffer = GuiManager.ResourceFactory.CreateStructBuffer<RWSceneInfo>();
+
         ObjectDataBuffer = renderable.CreateObjectData(scene);
         ObjectData = GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectDataLayout,
+                SceneDataBuffer,
                 ObjectDataBuffer
             )
         );
         
-        ShadowData = new RWShadowRenderUniform(scene, renderable);
-
         ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
         Pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
@@ -52,6 +57,7 @@ public struct RWRenderDescription : IDisposable
         Pipeline.Dispose();
         ObjectData.Dispose();
         ObjectDataBuffer.Dispose();
+        SceneDataBuffer.Dispose();
         TextureSet.Dispose();
     }
 }

@@ -23,15 +23,11 @@ public class RWScene : IDisposable
 
     public GuiTexture ShadowRender;
 
-    private readonly DeviceBuffer shadowDataBuffer;
-    private readonly ResourceSet shadowDataSet;
-
     private DeviceBuffer vertexBuffer;
     private DeviceBuffer indexBuffer;
     
     public Framebuffer ObjectFramebuffer { get; private set; }
     private Framebuffer shadowFramebuffer;
-    private Pipeline shadowPipeline;
     private readonly CommandList commandList;
 
     private readonly List<RWRenderDescription> renderItems = new();
@@ -53,15 +49,6 @@ public class RWScene : IDisposable
         // Draw Buffers
         vertexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer)); // 32 * const
         indexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.IndexBuffer)); // 4 * const
-        
-        shadowDataBuffer = factory.CreateBuffer(new BufferDescription(112 /*size of shadow uniform*/, BufferUsage.UniformBuffer));
-
-        shadowDataSet = factory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.RWObjectDataLayout,
-                shadowDataBuffer
-            )
-        );
 
         Width = 1;
         Height = 1;
@@ -153,20 +140,6 @@ public class RWScene : IDisposable
         shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
         shadowFramebuffer.Name = "Shadow Framebuffer";
 
-        ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
-        shadowPipeline = factory.CreateGraphicsPipeline(
-            new GraphicsPipelineDescription(
-                BlendStateDescription.SingleAlphaBlend,
-                new DepthStencilStateDescription(true, true, ComparisonKind.Less),
-                new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, false, false),
-                PrimitiveTopology.TriangleList,
-                RWUtils.RWShadowShaderSet,
-                layouts,
-                shadowFramebuffer.OutputDescription
-            )
-        );
-        shadowPipeline.Name = "Shadow Pipeline";
-
         Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
             Width,
@@ -221,21 +194,21 @@ public class RWScene : IDisposable
             
             for (int i = 0; i < ShadowRepeat; i++)
             {
-                commandList.UpdateBuffer(shadowDataBuffer, 0, desc.ShadowData);
-
+                commandList.UpdateBuffer(desc.SceneDataBuffer, 0, desc.SceneInfo);
+                
                 commandList.UpdateBuffer(vertexBuffer, 0, desc.Vertices);
                 commandList.UpdateBuffer(indexBuffer, 0, desc.Indices);
 
                 commandList.SetVertexBuffer(0, vertexBuffer);
                 commandList.SetIndexBuffer(indexBuffer, IndexFormat.UInt16);
 
-                commandList.SetPipeline(shadowPipeline);
-                commandList.SetGraphicsResourceSet(0, shadowDataSet);
+                commandList.SetPipeline(desc.Pipeline);
+                commandList.SetGraphicsResourceSet(0, desc.ObjectData); // check RWUniforms
                 if (desc.HasTextureSet) commandList.SetGraphicsResourceSet(1, desc.TextureSet);
 
                 commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
 
-                desc.ShadowData.RepeatCurrent++;
+                desc.SceneInfo.CurrentRepeat++;
             }
         }
     }
@@ -246,8 +219,13 @@ public class RWScene : IDisposable
         commandList.ClearColorTarget(0, RenderBg);
         commandList.ClearDepthStencil(1, 0);
 
-        foreach (RWRenderDescription desc in renderItems)
+        for (int i = 0; i < renderItems.Count; i++)
         {
+            RWRenderDescription desc = renderItems[i];
+            
+            desc.SceneInfo.RenderingShadows = false;
+            commandList.UpdateBuffer(desc.SceneDataBuffer, 0, desc.SceneInfo);
+
             commandList.UpdateBuffer(vertexBuffer, 0, desc.Vertices);
             commandList.UpdateBuffer(indexBuffer, 0, desc.Indices);
 
@@ -381,15 +359,12 @@ public class RWScene : IDisposable
     {
         graphicsDevice.WaitForIdle();
         ClearScene();
-
-        shadowDataSet.Dispose();
-
+        
         ObjectRender.Dispose();
         renderObjectStencil.Dispose();
         ObjectFramebuffer.Dispose();
 
         ShadowRender.Dispose();
-        shadowDataSet.Dispose();
         shadowFramebuffer.Dispose();
 
         vertexBuffer.Dispose();

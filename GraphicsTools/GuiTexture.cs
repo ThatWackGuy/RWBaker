@@ -111,10 +111,32 @@ public class GuiTexture : IDisposable
 
         return Create(name, texture, textureLayout);
     }
+    
+    public static GuiTexture CreateFromImage(string name, ReadOnlySpan<byte> bytes, ResourceLayout? textureLayout = null)
+    {
+        Image<Rgba32> image = Image.Load<Rgba32>(bytes);
+
+        Texture texture = GuiManager.ResourceFactory.CreateTexture(
+            new TextureDescription(
+                (uint)image.Width,
+                (uint)image.Height,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.Sampled,
+                TextureType.Texture2D
+            )
+        );
+        
+        GuiManager.UpdateTextureFromImage(texture, image);
+
+        return Create(name, texture, textureLayout);
+    }
 
     public static GuiTexture GetTexture(IntPtr index)
     {
-        return _map[index];
+        return _map.TryGetValue(index, out GuiTexture? texture) ? texture : GuiManager.MissingTex;
     }
 
     public static void DisposeAllTextures()

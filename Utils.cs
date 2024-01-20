@@ -6,6 +6,7 @@ using ImGuiNET;
 using System.Runtime.InteropServices;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
+using RWBaker.PropTools;
 using RWBaker.TileTools;
 using Veldrid;
 
@@ -42,28 +43,18 @@ public static class Utils
     public static void Nav()
     {
         if (!ImGui.BeginMainMenuBar()) return;
-        
-        if (ImGui.BeginMenu("Main"))
+
+        if (ImGui.MenuItem("Fetch All"))
         {
-            if (ImGui.MenuItem("Get Tiles"))
-            {
-                GuiManager.AddWindow(new TileLoader());
-            }
-            
-            if (ImGui.MenuItem("Get Props"))
-            {
-                // Program.WindowAdd.Add(new PropTools.PropLoader());
-            }
-            
-            if (ImGui.MenuItem("Select Palettes"))
-            {
-                GuiManager.AddWindow(new PalettePicker());
-            }
-
-            ImGui.EndMenu();
+            GuiManager.AddWindow(new RWObjectFetcher());
         }
-
-        if (Program.Tiles.Count > 0 && ImGui.BeginMenu("Tile Tools"))
+        
+        if (ImGui.MenuItem("Palette Picker"))
+        {
+            GuiManager.AddWindow(new PalettePicker());
+        }
+        
+        if (ImGui.BeginMenu("Render"))
         {
             if (ImGui.MenuItem("Render Single Tile"))
             {
@@ -75,11 +66,6 @@ public static class Utils
                 GuiManager.AddWindow(new RenderAllTiles());
             }
 
-            ImGui.EndMenu();
-        }
-        
-        if (Program.Tiles.Count > 0 && ImGui.BeginMenu("Prop Tools"))
-        {
             ImGui.EndMenu();
         }
 

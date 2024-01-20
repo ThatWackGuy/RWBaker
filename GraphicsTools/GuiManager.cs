@@ -35,6 +35,7 @@ public static class GuiManager
     private static DeviceBuffer projMatrixBuffer;
 
     private static GuiTexture fontTex;
+    public static GuiTexture MissingTex { get; private set; }
 
     private static Shader[] mainShaders;
     
@@ -136,11 +137,11 @@ public static class GuiManager
         io.ConfigDockingWithShift = true;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigDockingTransparentPayload = true;
-        
+
         CreateDeviceResources();
         RecreateFonts();
         SetPerFrameImGuiData(1f / 60f);
-        
+
         ImGui.NewFrame();
         frameBegun = true;
     }
@@ -155,8 +156,6 @@ public static class GuiManager
             InputSnapshot snapshot = Window.PumpEvents();
             if (!Window.Exists) break;
             
-            PaletteManager.Update();
-
             UpdateImGui(time, snapshot);
             Utils.Nav();
             
@@ -198,6 +197,8 @@ public static class GuiManager
                     Exception(e);
                 }
             }
+            
+            PaletteManager.Update();
 
             CommandList.Begin();
             CommandList.SetFramebuffer(GraphicsDevice.MainSwapchain.Framebuffer);
@@ -259,6 +260,9 @@ public static class GuiManager
         pipeline = ResourceFactory.CreateGraphicsPipeline(ref pipelineDesc);
 
         mainResourceSet = ResourceFactory.CreateResourceSet(new ResourceSetDescription(projectionLayout, projMatrixBuffer, GraphicsDevice.PointSampler));
+        
+        Texture missing = TextureFromResource("res.missingtex.png");
+        MissingTex = GuiTexture.Create("_missing", missing);
     }
     
     // TODO: Custom font support later?

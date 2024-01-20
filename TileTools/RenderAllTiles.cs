@@ -22,6 +22,14 @@ public class RenderAllTiles : Window
     protected override void Draw()
     {
         Begin();
+        
+        if (Program.Tiles.Count == 0)
+        {
+            ImGui.Text("NO TILES FOUND!");
+            ImGui.End();
+            return;
+        }
+        
         ImGui.TextDisabled($"Using Graphics Dir '{context.SavedGraphicsDir}'");
         ImGui.TextDisabled($"Using Palette: {PaletteManager.CurrentPalette.Name}");
         ImGui.TextDisabled("Bulk renders always use the first variation of a tile!");

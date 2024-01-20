@@ -39,6 +39,8 @@ public interface IRWRenderable
     public ShaderSetDescription GetShaderSetDescription();
 
     public int LayerCount();
+    
+    public int Layer();
 
     public bool GetTextureSet(RWScene scene, [MaybeNullWhen(false)] out ResourceSet textureSet);
 }

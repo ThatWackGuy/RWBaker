@@ -6,68 +6,71 @@ using RWBaker.TileTools;
 namespace RWBaker.GraphicsTools;
 
 [StructLayout(LayoutKind.Sequential)]
-public struct RWStandardRenderUniform
+public struct RWSceneInfo
 {
-    public readonly Matrix4x4 Projection;
-    public readonly Vector2 Offset;
-    public readonly Vector2 TexSize;
-
-    public RWStandardRenderUniform(Matrix4x4 proj, Vector2 offset, Vector2 texSize)
-    {
-        Projection = proj;
-        Offset = offset;
-        TexSize = texSize;
-    }
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public struct RWShadowRenderUniform
-{
-    public readonly Matrix4x4 Projection;
-    public readonly Vector2 LightOffset;
+    public readonly Matrix4x4 Transform;
+    public readonly float Layer;
+    public readonly float LayerCount;
     public readonly Vector2 ObjectOffset;
-    public readonly Vector2 TexSize;
-    public readonly int LayerCount;
-    public float RepeatCurrent;
-    public readonly float RepeatMax;
 
-    public RWShadowRenderUniform(RWScene scene, IRWRenderable renderable)
+    public bool RenderingShadows;
+    public float CurrentRepeat;
+    public readonly float MaxRepeat;
+    public readonly float PADDING = 0f;
+    
+    public readonly Vector2 LightOffset;
+    public readonly Vector2 ShadowTexSize;
+
+    public readonly Vector2 RenderableTexSize;
+    
+    public readonly Vector2 EffectColorsTexSize;
+    public readonly float EffectA;
+    public readonly float EffectB;
+
+    public RWSceneInfo(RWScene scene, IRWRenderable renderable)
     {
-        Projection = scene.Transform;
-        LightOffset = scene.LightOffset;
-        ObjectOffset = scene.ObjectOffset;
-        TexSize = renderable.GetTextureSize();
-        LayerCount = renderable.LayerCount();
-        RepeatCurrent = 0;
-        RepeatMax = scene.ShadowRepeat;
+        Transform = scene.Transform; // 64 bytes
+
+        Layer = renderable.Layer(); // 4
+        LayerCount = renderable.LayerCount(); // 4
+        ObjectOffset = scene.ObjectOffset; // 8
+        // 16 bytes total
+
+        RenderingShadows = true; // 4
+        CurrentRepeat = 0; // 4
+        MaxRepeat = scene.ShadowRepeat; // 4
+        // PADDING 4
+        // 16 bytes total
+
+        LightOffset = scene.LightOffset; // 8
+        ShadowTexSize = new Vector2(scene.Width, scene.Height); // 8
+        // 16 bytes total
+
+        RenderableTexSize = renderable.GetTextureSize(); // 8
+        EffectColorsTexSize = PaletteManager.EffectColors.Size; // 8
+        // 16 bytes total
+
+        EffectA = PaletteManager.Context.EffectColorA; // 4
+        EffectB = PaletteManager.Context.EffectColorB; // 4
+        // 8 bytes total
     }
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWTileRenderUniform
 {
-    public readonly Matrix4x4 Projection;
-    public readonly Vector2 Offset;
-    public readonly Vector2 TexSize;
-    public readonly Vector2 ShTexSize;
     public readonly Vector2 TileSize;
     public readonly int BufferTiles;
-    public readonly bool UseRainPalette;
-    public readonly int LayerCount;
-    public readonly int PaletteLayer;
-    public readonly bool IsBox;
+    public readonly int Vars;
+    public readonly int UseRainPalette;
+    public readonly int IsBox;
 
-    public RWTileRenderUniform(RWScene scene, Tile tile)
+    public RWTileRenderUniform(Tile tile)
     {
-        Projection = scene.Transform;
-        Offset = scene.ObjectOffset;
-        TexSize = tile.GetTextureSize();
-        ShTexSize = new Vector2(scene.Width, scene.Height);
         TileSize = (Vector2)tile.Size;
         BufferTiles = tile.BufferTiles;
-        UseRainPalette = tile.UseRainPalette;
-        LayerCount = tile.LayerCount();
-        PaletteLayer = tile.RenderLayer;
-        IsBox = tile.Type == TileType.Box;
+        Vars = tile.Variants;
+        UseRainPalette = tile.UseRainPalette ? 1 : 0;
+        IsBox = tile.Type == TileType.Box ? 1 : 0;
     }
 }

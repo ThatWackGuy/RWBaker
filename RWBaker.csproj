@@ -26,10 +26,10 @@
 
     <ItemGroup>
         <EmbeddedResource Include="res\shaders\*.*" />
-        <None Remove="res\bakertex.png" />
         <EmbeddedResource Include="res\bakertex.png" />
-        <None Remove="res\palette0.png" />
+        <EmbeddedResource Include="res\missingtex.png" />
         <EmbeddedResource Include="res\palette0.png" />
+        <EmbeddedResource Include="res\effectcolors.png" />
     </ItemGroup>
 
     <ItemGroup>
@@ -42,11 +42,6 @@
         <None Update="cimgui.so">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Remove="res\baker.ico" />
-      <Resource Include="res\baker.ico" />
     </ItemGroup>
 
 </Project>

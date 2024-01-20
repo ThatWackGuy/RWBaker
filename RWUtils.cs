@@ -1,15 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
-using RWBaker.PropTools;
 using RWBaker.TileTools;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -17,15 +11,13 @@ namespace RWBaker;
 
 public static class RWUtils
 {
-    public static ResourceLayout RWObjectTextureLayout;
-
-    public static ShaderSetDescription RWShadowShaderSet;
-
-    public static ShaderSetDescription TileRendererShaderSet;
-    public static ResourceLayout RWObjectDataLayout;
-
     public static VertexLayoutDescription[] RWVertexLayout;
 
+    public static ResourceLayout RWObjectDataLayout;
+    public static ResourceLayout RWObjectTextureLayout;
+    
+    public static ShaderSetDescription TileRendererShaderSet;
+    
     public static void LoadGraphicsResources()
     {
         ResourceFactory factory = GuiManager.ResourceFactory;
@@ -54,26 +46,21 @@ public static class RWUtils
         };
         // 36 bytes for each input
         
-        RWObjectTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("PaletteTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
-            )
-        );
-        
         RWObjectDataLayout = factory.CreateResourceLayout(
             new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("SceneData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("RenderData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)
             )
         );
-
-        // SHADOWS
-        ShaderDescription shadowVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.shadow.vert"), "main");
-        ShaderDescription shadowFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.shadow.frag"), "main");
-        Shader[] shadowShaders = factory.CreateFromSpirv(shadowVert, shadowFrag);
-
-        RWShadowShaderSet = new ShaderSetDescription(RWVertexLayout, shadowShaders);
         
+        RWObjectTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("PaletteTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("EffectTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+            )
+        );
+
         // TILES
         ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
         ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
@@ -188,7 +175,7 @@ public static class RWUtils
         foreach (string line in initLines)
         {
             // empty line or comment
-            if (Regex.IsMatch(line, "^\\s*$") || Regex.IsMatch(line, "^--\\w*\\n")) continue;
+            if (Regex.IsMatch(line, "^\\s*$") || line.StartsWith("--")) continue;
             
             // category definition
             if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\s*\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
@@ -203,19 +190,9 @@ public static class RWUtils
                 continue;
             }
 
-            try
-            {
-                // tile definition
-                Tile tile = new(line, lastCategory, lastColor, ref log);
-                Program.Tiles.Add(tile);
-            }
-            catch (Exception e)
-            {
-                log += $"A problem occurred while parsing init line {line} :: {e}\n";
-            }
+            Tile tile = new(line, lastCategory, lastColor, ref log);
+            Program.Tiles.Add(tile);
         }
-
-        if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
     }
     
     public static void GetProps(Context context, out string log)
@@ -257,11 +234,8 @@ public static class RWUtils
                 continue;
             }
             
-            // tile definition
-            Prop prop = new(line, lastCategory, lastColor, ref log);
-            Program.Props.Add(prop);
+            // Prop prop = new(line, lastCategory, lastColor, ref log);
+            // Program.Props.Add(prop);
         }
-
-        if (log == "") log += "No errors have occured!\nYou're free to do other stuff!";
     }
 }

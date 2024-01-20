@@ -6,8 +6,6 @@ using System.Numerics;
 using System.Text.RegularExpressions;
 using RWBaker.GeneralTools;
 using RWBaker.GraphicsTools;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 
 namespace RWBaker.TileTools;
@@ -55,7 +53,11 @@ public enum TileTag
     TempleFloor,
     NonSolid,
     NotProp,
-    NotTrashProp
+    NotTrashProp,
+    
+    // Community Editor
+    EffectColorA,
+    EffectColorB
 }
 
 public class Tile : RWObject, IRWRenderable
@@ -121,12 +123,19 @@ public class Tile : RWObject, IRWRenderable
         
         // NAME
         Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
+
         ProperName = $"{Category} - {Name}";
 
         // SIZE
         Match sizeStr = Regex.Match(line, @"#sz *: *point\( *([0-9]+) *, *([0-9]+) *\)");
-        int sizeX = int.Parse(sizeStr.Groups[1].Value);
-        int sizeY = int.Parse(sizeStr.Groups[2].Value);
+        if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out int sizeX))
+        {
+            LogWarning($"Couldn't parse Size X component on tile {Name}", ref log);
+        }
+        if (!RWUtils.LingoInt(sizeStr.Groups[2].Value, out int sizeY))
+        {
+            LogWarning($"Couldn't parse Size Y component on tile {Name}", ref log);
+        }
         Size = new Vector2Int(sizeX, sizeY);
         
         // SPECIFICATIONS
@@ -166,7 +175,9 @@ public class Tile : RWObject, IRWRenderable
             if (y < sizeY) continue;
             y = 0;
         }
-        
+
+        x = 0;
+        y = 0;
         foreach (string spec in specifications2)
         {
             Specifications[x, y, 1] = int.Parse(spec);
@@ -176,6 +187,9 @@ public class Tile : RWObject, IRWRenderable
             if (x < sizeX) continue;
             x = 0;
             y++;
+            
+            if (y < sizeY) continue;
+            y = 0;
         }
 
         // TILE TYPE
@@ -190,14 +204,31 @@ public class Tile : RWObject, IRWRenderable
 
         if (!RWUtils.LingoIntArray(repeatLayers, out RepeatLayers))
         {
-            // Boxes take up the entire layer
-            if (Type is TileType.VoxelStructRockType or TileType.Box)
+            switch (Type)
             {
-                RepeatLayers = new[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-            }
-            else
-            {
-                LogWarning($"Couldn't parse repeatL on tile {Name}!", ref log);
+                case TileType.VoxelStruct or TileType.VoxelStructRandomDisplaceHorizontal or TileType.VoxelStructRandomDisplaceVertical:
+                {
+                    break;
+                }
+                
+                case TileType.VoxelStructRockType:
+                {
+                    RepeatLayers = new[] { 10 };
+                    break;
+                }
+
+                // Boxes take up the entire layer
+                case TileType.Box:
+                {
+                    RepeatLayers = new[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+                    break;
+                }
+                
+                default:
+                {
+                    LogWarning($"Couldn't parse repeatL on tile {Name}!", ref log);
+                    break;
+                }
             }
         }
         renderRepeatLayers = RepeatLayers;
@@ -237,7 +268,7 @@ public class Tile : RWObject, IRWRenderable
         }
 
         // VARIATIONS
-        string rnd = Regex.Match(line, @"#rnd *: *([0-9])").Groups[1].Value;
+        string rnd = Regex.Match(line, @"#rnd *: *([0-9]*)").Groups[1].Value;
         if (!RWUtils.LingoInt(rnd, out Variants))
         {
             LogWarning( $"Couldn't parse rnd on tile {Name}!", ref log);
@@ -339,7 +370,7 @@ public class Tile : RWObject, IRWRenderable
     {
         DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
         
-        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(scene, this));
+        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(this));
 
         return buffer;
     }
@@ -347,6 +378,7 @@ public class Tile : RWObject, IRWRenderable
     public ShaderSetDescription GetShaderSetDescription() => RWUtils.TileRendererShaderSet;
 
     public int LayerCount() => renderRepeatLayers.Sum();
+    public int Layer() => _renderLayer;
 
     public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (LayerCount() - 1) * Vector2.Abs(scene.ObjectOffset);
 
@@ -359,6 +391,7 @@ public class Tile : RWObject, IRWRenderable
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture,
                 PaletteManager.CurrentPalette.DisplayTex.Texture,
+                PaletteManager.EffectColors.Texture,
                 scene.ShadowRender.Texture
             )
         );
@@ -368,7 +401,7 @@ public class Tile : RWObject, IRWRenderable
 
     public void CacheTexture(Context context)
     {
-        if (!File.Exists(context.SavedGraphicsDir + "/" + Name + ".png")) throw new FileNotFoundException("File for ");
+        if (!File.Exists(context.SavedGraphicsDir + "/" + Name + ".png")) throw new FileNotFoundException();
         
         CachedTexture = GuiManager.TextureFromImage(context.SavedGraphicsDir + "/" + Name + ".png");
     }

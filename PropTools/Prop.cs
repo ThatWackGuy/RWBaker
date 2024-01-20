@@ -3,19 +3,10 @@ using System.Numerics;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using RWBaker.GeneralTools;
+using RWBaker.GraphicsTools;
+using Veldrid;
 
 namespace RWBaker.PropTools;
-
-public enum PropType
-{
-    Standard,
-    VariedStandard,
-    Soft,
-    VariedSoft,
-    SimpleDecal,
-    VariedDecal,
-    Antimatter
-}
 
 public enum PropColorTreatment
 {
@@ -38,7 +29,49 @@ public enum PropTags
     CustomColor = 512
 }
 
-public class Prop : RWObject
+public abstract class Prop : RWObject, IRWRenderable
+{
+    public readonly string Category;
+
+    public readonly Vector3 CategoryColor;
+
+    public readonly string Name;
+
+    public readonly bool Colorize;
+
+    public readonly PropTags Tags;
+
+    public readonly string[] Notes;
+
+    public Prop(string category, Vector3 categoryColor, string name)
+    {
+        Category = category;
+        CategoryColor = categoryColor;
+        Name = name;
+        Colorize = false;
+        Tags = PropTags.None;
+        Notes = Array.Empty<string>();
+    }
+
+    public abstract RWRenderDescription GetSceneInfo(RWScene scene);
+
+    public abstract DeviceBuffer CreateObjectData(RWScene scene);
+
+    public abstract Vector2Int GetRenderSize(RWScene scene);
+
+    public abstract Vector2 GetTextureSize();
+
+    public abstract ShaderSetDescription GetShaderSetDescription();
+
+    public abstract int LayerCount();
+
+    public abstract int Layer();
+
+    public abstract bool GetTextureSet(RWScene scene, out ResourceSet textureSet);
+}
+
+/*
+public class Prp : RWObject
 {
     [JsonInclude] public readonly string Category;
     
@@ -86,7 +119,7 @@ public class Prop : RWObject
 
     [JsonInclude] public readonly string[] Notes;
 
-    public Prop(string line, string category, Vector3 categoryColor, ref string log)
+    public Prp(string line, string category, Vector3 categoryColor, ref string log)
     {
         /*
          * ALL ->
@@ -115,7 +148,7 @@ public class Prop : RWObject
          * depth affect highlights
          * shadow border
          * smooth shading
-         */
+         *
         
         // CATEGORIES
         Category = category;
@@ -195,3 +228,4 @@ public class Prop : RWObject
         // TODO: PROPS
     }
 }
+*/

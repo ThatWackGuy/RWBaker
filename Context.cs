@@ -40,6 +40,10 @@ public class Context
     // Last palette percentages
     public int Palette1Percentage;
     public int Palette2Percentage;
+    
+    // Effect Colors
+    public int EffectColorA;
+    public int EffectColorB;
 
     // Last tile data
     public string TileLastSearched;
@@ -72,6 +76,9 @@ public class Context
         
         Palette1Percentage = 100;
         Palette2Percentage = 0;
+
+        EffectColorA = 0;
+        EffectColorB = 3;
         
         TileLastSearched = "";
         TileLastUsed = "";

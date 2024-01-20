@@ -21,7 +21,8 @@ public static class Program
     public static void Main()
     {
         Configuration.Default.PreferContiguousImageBuffers = true;
-        
+
+        Exception? contextFailed = null;
         // Create the userdata file if it doesn't exist
         if (!File.Exists("./userdata.json"))
         {
@@ -37,30 +38,29 @@ public static class Program
             }
             catch (Exception e)
             {
+                contextFailed = e;
                 Context = new Context();
-                GuiManager.Exception(e);
             }
         }
-        
+
         Context.Save("./userdata.json");
 
         GuiManager.Load(Context);
+        if (contextFailed != null)
+        {
+            GuiManager.Exception(contextFailed);
+        }
 
-        // Load Icon Texture
+        // Load mandatory textures
         Texture iconTex = GuiManager.TextureFromResource("res.bakertex.png");
         IconTexture = GuiTexture.Create("_icon", iconTex);
 
-        if (Context.SavedGraphicsDir != "")
-        {
-            RWUtils.GetTiles(Context, out string tileLog);
-            Console.WriteLine($"TILE LOAD LOG:\n{tileLog}\n\n");
-        }
-        
+        if (Context.SavedGraphicsDir != "") RWUtils.GetTiles(Context, out string _);
+
         PaletteManager.Load(Context);
-        PaletteManager.PaletteCheck(Context);
-        
+
         RWUtils.LoadGraphicsResources();
-        
+
         GuiManager.RenderProcess();
     }
 }

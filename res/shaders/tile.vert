@@ -1,16 +1,30 @@
 #version 450
 
-layout(set = 0, binding = 0, std140) uniform RenderData
+layout(set = 0, binding = 0, std140) uniform SceneInfo
 {
-    mat4 vTransform;  // x+ right, y+ down matrix
-    vec2 vOffsetPerLayer; // object offset
+    mat4 transform;  // x+ right, y+ down matrix
+    float layer;
+    float layerCount;
+    vec2 objectOffset;
+
+    bool isShadow;
+    float shadowRepeatCurrent;
+    float shadowRepeatMax;
+    vec2 lightOffset;
+    vec2 shSize; // shadow texture size
+
     vec2 texSize;
-    vec2 shTexSize;
+    vec2 effectColorsSize;
+    float effectA;
+    float effectB;
+} s;
+
+layout(set = 0, binding = 1, std140) uniform RenderData
+{
     vec2 tileSize;
-    int bfTiles;
+    float bfTiles;
+    float vars;
     bool pRain;
-    int layerCount;
-    int palLayer;
     bool isBox;
 } d;
 
@@ -24,9 +38,19 @@ layout(location = 2) out float f_shLayer;
 
 void main()
 {
-    gl_Position = d.vTransform * vec4(v_position.xy + max(-d.vOffsetPerLayer, 0) * (d.layerCount - 1) + d.vOffsetPerLayer * v_position.z, v_position.z, 1);
+    if (s.isShadow)
+    {
+        float depthOffset = s.shadowRepeatCurrent / s.shadowRepeatMax;
+        vec2 layerOffset = max(s.objectOffset, 0) * (s.layerCount - 1) + -s.objectOffset * (s.layerCount - 1 - v_position.z - depthOffset);
+        vec2 offset = s.lightOffset * (s.layerCount - 1) + -s.lightOffset * (s.layerCount - 1 - v_position.z - depthOffset);
+        gl_Position = s.transform * vec4(v_position.xy + layerOffset + offset, v_position.z + depthOffset, 1);
+    }
+    else
+    {
+        gl_Position = s.transform * vec4(v_position.xy + max(-s.objectOffset, 0) * (s.layerCount - 1) + s.objectOffset * v_position.z, v_position.z, 1);
+    }
 
     f_texCoord = v_texCoord;
     f_layer = int(v_position.z);
-    f_shLayer = (d.vTransform * vec4(0, 0, v_position.z - 0.8, 1)).z;
+    f_shLayer = (s.transform * vec4(0, 0, v_position.z - 0.8, 1)).z;
 }
