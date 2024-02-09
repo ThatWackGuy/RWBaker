@@ -1,8 +1,9 @@
 using System;
-using RWBaker.GeneralTools;
+using RWBaker.Gui;
+using RWBaker.RWObjects;
 using Veldrid;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Rendering;
 
 public struct RWRenderDescription : IDisposable
 {
@@ -10,11 +11,11 @@ public struct RWRenderDescription : IDisposable
     public readonly ushort[] Indices;
     public readonly ResourceSet TextureSet;
     public readonly bool HasTextureSet;
-    
+
     public readonly DeviceBuffer SceneDataBuffer;
     public readonly DeviceBuffer ObjectDataBuffer;
     public readonly ResourceSet ObjectData;
-    
+
     public RWSceneInfo SceneInfo;
     public readonly Pipeline Pipeline;
 
@@ -22,7 +23,7 @@ public struct RWRenderDescription : IDisposable
     {
         Vertices = vertices;
         Indices = indices;
-        
+
         HasTextureSet = renderable.GetTextureSet(scene, out ResourceSet? textureSet);
         TextureSet = textureSet!;
 
@@ -37,7 +38,7 @@ public struct RWRenderDescription : IDisposable
                 ObjectDataBuffer
             )
         );
-        
+
         ResourceLayout[] layouts = { RWUtils.RWObjectDataLayout, RWUtils.RWObjectTextureLayout };
         Pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
@@ -51,7 +52,7 @@ public struct RWRenderDescription : IDisposable
             )
         );
     }
-    
+
     public void Dispose()
     {
         Pipeline.Dispose();

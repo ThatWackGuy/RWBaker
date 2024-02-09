@@ -1,12 +1,10 @@
 using System;
 using System.Numerics;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
-using RWBaker.GeneralTools;
-using RWBaker.GraphicsTools;
+using RWBaker.Rendering;
+using RWBaker.RWObjects;
 using Veldrid;
 
-namespace RWBaker.PropTools;
+namespace RWBaker.Props;
 
 public enum PropColorTreatment
 {
@@ -29,7 +27,7 @@ public enum PropTags
     CustomColor = 512
 }
 
-public abstract class Prop : RWObject, IRWRenderable
+public abstract class Prop : IRWRenderable
 {
     public readonly string Category;
 
@@ -41,15 +39,18 @@ public abstract class Prop : RWObject, IRWRenderable
 
     public readonly PropTags Tags;
 
+    public readonly int Variations;
+
     public readonly string[] Notes;
 
-    public Prop(string category, Vector3 categoryColor, string name)
+    protected Prop(string category, Vector3 categoryColor, string name)
     {
         Category = category;
         CategoryColor = categoryColor;
         Name = name;
         Colorize = false;
         Tags = PropTags.None;
+        Variations = 1;
         Notes = Array.Empty<string>();
     }
 
@@ -74,45 +75,45 @@ public abstract class Prop : RWObject, IRWRenderable
 public class Prp : RWObject
 {
     [JsonInclude] public readonly string Category;
-    
+
     [JsonIgnore] public readonly Vector3 CategoryColor;
-    
+
     [JsonInclude] public readonly string CategoryColorSer;
-    
+
     [JsonInclude] public readonly string Name;
 
     [JsonInclude] public readonly PropType Type;
-    
+
     [JsonInclude] public readonly PropColorTreatment ColorTreatment;
 
     [JsonInclude] public readonly int Bevel;
-    
+
     [JsonInclude] public readonly Vector2Int Size;
-    
+
     [JsonInclude] public readonly Vector2Int PixelSize;
-    
+
     [JsonInclude] public readonly int[] RepeatLayers;
 
     [JsonInclude] public readonly int Variations;
-    
+
     [JsonInclude] public readonly bool Random;
 
     [JsonInclude] public readonly int Depth;
 
     [JsonInclude] public readonly float Round;
-    
+
     [JsonInclude] public readonly float ContourExp;
-    
+
     [JsonInclude] public readonly bool SelfShade;
-    
+
     [JsonInclude] public readonly float HighlightBorder;
-    
+
     [JsonInclude] public readonly float DepthAffectHighlights;
-    
+
     [JsonInclude] public readonly float ShadowBorder;
-    
+
     [JsonInclude] public readonly int SmoothShading;
-    
+
     [JsonInclude] public readonly bool Colorize;
 
     [JsonInclude] public readonly PropTags Tags;
@@ -128,7 +129,7 @@ public class Prp : RWObject
          * colorize
          * tags
          * notes
-         * 
+         *
          * STANDARD & StVARIED ->
          * tile size
          * color treatment
@@ -149,15 +150,15 @@ public class Prp : RWObject
          * shadow border
          * smooth shading
          *
-        
+
         // CATEGORIES
         Category = category;
         CategoryColor = categoryColor;
         CategoryColorSer = $"{categoryColor.X},{categoryColor.Y},{categoryColor.Z}";
-        
+
         // NAME
         Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
-        
+
         // TYPE
         string typeStr = Regex.Match(line, "#tp *: *\"(.*?)\"").Groups[1].Value;
         if (!RWUtils.LingoEnum(typeStr, PropType.Standard, out PropType type))
@@ -165,7 +166,7 @@ public class Prp : RWObject
             log += $"Couldn't parse prop type '{typeStr}' on prop {Name}! Defaulting to Standard.\n";
         }
         Type = type;
-        
+
         // TAGS
 
         if (Type is
@@ -187,7 +188,7 @@ public class Prp : RWObject
                     $"Couldn't parse prop color treatment '{colorTreatment}' on prop {Name}! Defaulting to Standard.\n";
             }
         }
-        
+
         // _Varied implements:
         // variations
         if (Type is PropType.VariedStandard or PropType.VariedSoft or PropType.VariedDecal)
@@ -210,7 +211,7 @@ public class Prp : RWObject
             RWUtils.LingoInt(sizeStr.Groups[2].Value, out int sizeY);
             Size = new Vector2Int(sizeX, sizeY);
         }
-        
+
         // Soft implements:
         // depth [int]
         // round [float]
@@ -222,9 +223,9 @@ public class Prp : RWObject
         // smooth shading
         if (Type is PropType.Soft)
         {
-            
+
         }
-        
+
         // TODO: PROPS
     }
 }

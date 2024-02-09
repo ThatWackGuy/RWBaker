@@ -7,7 +7,7 @@ using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using ImGuiNET;
-using RWBaker.GeneralTools;
+using RWBaker.Windows;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
@@ -15,7 +15,7 @@ using Veldrid.Sdl2;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Gui;
 
 public static class GuiManager
 {
@@ -23,7 +23,7 @@ public static class GuiManager
     public static ResourceFactory ResourceFactory  { get; private set; }
 
     private static bool frameBegun;
-    
+
     public static Sdl2Window Window;
     public static CommandList CommandList;
     private static readonly RgbaFloat clearColor = new(0.15f, 0.15f, 0.15f, 0);
@@ -36,50 +36,52 @@ public static class GuiManager
 
     private static GuiTexture fontTex;
     public static GuiTexture MissingTex { get; private set; }
+    public static GuiTexture IconTexture { get; private set; }
 
     private static Shader[] mainShaders;
-    
+
     public static ResourceLayout TextureLayout;
     private static ResourceLayout projectionLayout;
 
     private static Pipeline pipeline;
-    
+
     private static ResourceSet mainResourceSet;
-    
+
     public static int WindowWidth { get; private set; }
     public static int WindowHeight { get; private set; }
-        
+
     public static int WindowPosX { get; private set; }
     public static int WindowPosY { get; private set; }
-        
-    private static readonly Vector2 scaleFactor = Vector2.One;
-    
-    // Windows
+
+    public static bool DebugGraphics { get; private set; }
+
+    public static Vector2 ScaleFactor { get; private set; }
+
     private static readonly List<Window> windows = new();
     public static ReadOnlyCollection<Window> Windows => windows.AsReadOnly();
 
     private static readonly List<Window> windowsToDelete = new();
     private static readonly List<Window> windowsToAdd = new();
 
-    public static void Load(Context context)
+    public static void Load(UserData userData)
     {
         // no.
-        if (context.WindowState == WindowState.Hidden) context.WindowState = WindowState.Normal;
-        
+        if (userData.WindowState == WindowState.Hidden) userData.WindowState = WindowState.Normal;
+
         // Create the window
         VeldridStartup.CreateWindowAndGraphicsDevice(
             new WindowCreateInfo(
-                context.SavedWindowPos.X,
-                context.SavedWindowPos.Y,
-                context.SavedWindowSize.X,
-                context.SavedWindowSize.Y,
-                context.WindowState == WindowState.Minimized ? WindowState.Normal : context.WindowState,
+                userData.SavedWindowPos.X,
+                userData.SavedWindowPos.Y,
+                userData.SavedWindowSize.X,
+                userData.SavedWindowSize.Y,
+                userData.WindowState == WindowState.Minimized ? WindowState.Normal : userData.WindowState,
                 "RWBaker"
             ),
             new GraphicsDeviceOptions(
-                context.GraphicsDebug,
+                userData.DebugGraphics,
                 null,
-                context.VSync,
+                userData.VSync,
                 ResourceBindingModel.Improved,
                 true,
                 true
@@ -92,10 +94,10 @@ public static class GuiManager
         // with a minimised or hidden window at startup a swapchain cannot be created
         // leading to vkAcquireNextImageKHR giving out an annoyingly vague memory exception
         // this line, the state sterilisation and the ternary checks above make sure that never happens
-        if (context.WindowState == WindowState.Minimized) Window.WindowState = WindowState.Minimized;
+        if (userData.WindowState == WindowState.Minimized) Window.WindowState = WindowState.Minimized;
 
         CommandList = graphics.ResourceFactory.CreateCommandList();
-        
+
         Window.Resized += () =>
         {
             GraphicsDevice.MainSwapchain.Resize((uint)Window.Width, (uint)Window.Height);
@@ -111,24 +113,23 @@ public static class GuiManager
 
         Window.Closing += () =>
         {
-            context.WindowState = Window.WindowState;
-            context.SavedWindowPos.X = WindowPosX;
-            context.SavedWindowPos.Y = WindowPosY;
-            context.SavedWindowSize.X = WindowWidth;
-            context.SavedWindowSize.Y = WindowHeight;
-            Program.Context.Save("./userdata.json");
+            UserData save = new(Program.ObjectManager, Program.PaletteManager);
+            save.Save("./userdata.json");
         };
-        
+
+        ScaleFactor = (Vector2)userData.ScalingFactor;
+        DebugGraphics = userData.DebugGraphics;
+
         GraphicsDevice = graphics;
         ResourceFactory = graphics.ResourceFactory;
-        
+
         outputDescription = graphics.MainSwapchain.Framebuffer.OutputDescription;
 
         WindowWidth = Window.Width;
         WindowHeight = Window.Height;
         WindowPosX = Window.X;
         WindowPosY = Window.Y;
-        
+
         ImGui.CreateContext();
         ImGuiIOPtr io = ImGui.GetIO();
         io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
@@ -155,11 +156,22 @@ public static class GuiManager
             stopwatch.Restart();
             InputSnapshot snapshot = Window.PumpEvents();
             if (!Window.Exists) break;
-            
+
             UpdateImGui(time, snapshot);
             Utils.Nav();
-            
+
             ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+
+            if (windowsToAdd.Count > 0)
+            {
+                // Add pending windows
+                foreach (Window w in windowsToAdd)
+                {
+                    windows.Add(w);
+                }
+
+                windowsToAdd.Clear();
+            }
 
             if (windowsToDelete.Count > 0)
             {
@@ -171,17 +183,6 @@ public static class GuiManager
                 }
 
                 windowsToDelete.Clear();
-            }
-
-            if (windowsToAdd.Count > 0)
-            {
-                // Add pending windows
-                foreach (Window w in windowsToAdd)
-                {
-                    windows.Add(w);
-                }
-
-                windowsToAdd.Clear();
             }
 
             // Update remaining windows
@@ -197,8 +198,6 @@ public static class GuiManager
                     Exception(e);
                 }
             }
-            
-            PaletteManager.Update();
 
             CommandList.Begin();
             CommandList.SetFramebuffer(GraphicsDevice.MainSwapchain.Framebuffer);
@@ -209,7 +208,7 @@ public static class GuiManager
             GraphicsDevice.SwapBuffers(GraphicsDevice.MainSwapchain);
             GraphicsDevice.WaitForIdle();
         }
-        
+
         Dispose();
     }
 
@@ -217,9 +216,9 @@ public static class GuiManager
     {
         vertexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(10000, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
         indexBuffer = ResourceFactory.CreateBuffer(new BufferDescription(2000, BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-        
+
         projMatrixBuffer = ResourceFactory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
-        
+
         ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.vertex.spv"), "main");
         ShaderDescription guiFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.fragment.spv"), "main");
         mainShaders = ResourceFactory.CreateFromSpirv(guiVert, guiFrag);
@@ -232,14 +231,14 @@ public static class GuiManager
                 new VertexElementDescription("in_color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Byte4_Norm)
             )
         };
-        
+
         projectionLayout = ResourceFactory.CreateResourceLayout(
             new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("ProjectionMatrixBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
                 new ResourceLayoutElementDescription("MainSampler", ResourceKind.Sampler, ShaderStages.Fragment)
             )
         );
-        
+
         TextureLayout = ResourceFactory.CreateResourceLayout(
             new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
@@ -256,15 +255,18 @@ public static class GuiManager
             outputDescription,
             ResourceBindingModel.Improved
         );
-        
+
         pipeline = ResourceFactory.CreateGraphicsPipeline(ref pipelineDesc);
 
         mainResourceSet = ResourceFactory.CreateResourceSet(new ResourceSetDescription(projectionLayout, projMatrixBuffer, GraphicsDevice.PointSampler));
-        
+
         Texture missing = TextureFromResource("res.missingtex.png");
         MissingTex = GuiTexture.Create("_missing", missing);
+
+        Texture iconTex = TextureFromResource("res.bakertex.png");
+        IconTexture = GuiTexture.Create("_icon", iconTex);
     }
-    
+
     // TODO: Custom font support later?
     public static void RecreateFonts()
     {
@@ -296,11 +298,11 @@ public static class GuiManager
             0,
             0
         );
-        
-        fontTex = GuiTexture.Create("_default_font", texture);
+
+        fontTex = GuiTexture.Create("_defaultFont", texture);
 
         io.Fonts.SetTexID(fontTex.Index);
-        
+
         io.Fonts.ClearTexData();
     }
 
@@ -312,9 +314,9 @@ public static class GuiManager
             {
                 throw new Exception("MEMORY NOT AVAILABLE");
             }
-            
+
             using MemoryHandle handle = mem.Pin();
-            
+
             GraphicsDevice.UpdateTexture(
                 texture,
                 (IntPtr)handle.Pointer,
@@ -328,7 +330,7 @@ public static class GuiManager
                 0,
                 0
             );
-            
+
             handle.Dispose();
         }
     }
@@ -347,12 +349,12 @@ public static class GuiManager
                 TextureType.Texture2D
             )
         );
-        
+
         UpdateTextureFromImage(texture, image);
 
         return texture;
     }
-    
+
     public static Texture TextureFromImage(string imagePath)
     {
         Image<Rgba32> image = Image.Load<Rgba32>(imagePath);
@@ -369,12 +371,12 @@ public static class GuiManager
                 TextureType.Texture2D
             )
         );
-        
+
         UpdateTextureFromImage(texture, image);
 
         return texture;
     }
-    
+
     public static Texture TextureFromResource(string path)
     {
         Image<Rgba32> image = Image.Load<Rgba32>(Utils.GetEmbeddedBytes(path));
@@ -391,24 +393,23 @@ public static class GuiManager
                 TextureType.Texture2D
             )
         );
-        
+
         UpdateTextureFromImage(texture, image);
 
         return texture;
     }
 
-    public static void AddWindow(Window window) 
+    public static void AddWindow(Window window)
     {
-        if (Windows.Any(w => w.InternalIdentifier == window.InternalIdentifier)) return;
+        if (windows.Any(w => w.InternalIdentifier == window.InternalIdentifier)) return;
 
-        window.Open = true;
         windowsToAdd.Add(window);
     }
 
     public static void RemoveWindow(Window window)
     {
-        if (Windows.All(w => w.InternalIdentifier != window.InternalIdentifier)) return;
-        
+        if (windows.All(w => w.InternalIdentifier != window.InternalIdentifier)) return;
+
         windowsToDelete.Add(window);
     }
 
@@ -425,31 +426,31 @@ public static class GuiManager
         ImGui.Render();
         RenderImGui(ImGui.GetDrawData(), cl);
     }
-    
+
     public static void UpdateImGui(float deltaSeconds, InputSnapshot snapshot)
     {
         if (frameBegun)
         {
             ImGui.Render();
         }
-        
+
         SetPerFrameImGuiData(deltaSeconds);
         UpdateImGuiInput(snapshot);
 
         frameBegun = true;
         ImGui.NewFrame();
     }
-    
+
     private static void SetPerFrameImGuiData(float deltaSeconds)
     {
         ImGuiIOPtr io = ImGui.GetIO();
         io.DisplaySize = new Vector2(
-            WindowWidth / scaleFactor.X,
-            WindowHeight / scaleFactor.Y);
-        io.DisplayFramebufferScale = scaleFactor;
+            WindowWidth / ScaleFactor.X,
+            WindowHeight / ScaleFactor.Y);
+        io.DisplayFramebufferScale = ScaleFactor;
         io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
     }
-    
+
     private static ImGuiKey KeyToImGuiKeyShortcut(Key keyToConvert, Key startKey1, ImGuiKey startKey2)
     {
         int changeFromStart1 = (int)keyToConvert - (int)startKey1;
@@ -617,10 +618,10 @@ public static class GuiManager
                     cl.SetGraphicsResourceSet(1,
                         cmd.TextureId == fontTex.Index
                             ? fontTex.ResourceSet
-                            : GuiTexture.GetTexture(cmd.TextureId).ResourceSet
+                            : GuiTexture.GetTextureSafe(cmd.TextureId).ResourceSet
                     );
                 }
-                
+
                 cl.SetScissorRect(
                     0,
                     (uint)cmd.ClipRect.X,
@@ -637,12 +638,12 @@ public static class GuiManager
                     0
                 );
             }
-            
+
             vtxOffset += cmd_list.VtxBuffer.Size;
             idxOffset += cmd_list.IdxBuffer.Size;
         }
     }
-    
+
     public static void Dispose()
     {
         GraphicsDevice.WaitForIdle();
@@ -654,14 +655,14 @@ public static class GuiManager
         TextureLayout.Dispose();
         pipeline.Dispose();
         mainResourceSet.Dispose();
-        
+
         GuiTexture.DisposeAllTextures();
 
         foreach (Shader shader in mainShaders)
         {
             shader.Dispose();
         }
-        
+
         GraphicsDevice.Dispose();
     }
 }

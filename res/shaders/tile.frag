@@ -124,10 +124,12 @@ void main()
 
     // Palette colors
     vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer + s.layer * 10;
-    vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize);
-    vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize);
-    vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize);
+    float palX = f_layer + s.layer * 10 + .2;
+    vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize); // Highlights
+    vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize); // Base
+    vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize); // Shadows
+    vec4 pF = texture(pTex, vec2(1.2, paletteOffset - 2) / pSize); // Fog
+    float pFI = texture(pTex, vec2(9.2, paletteOffset - 2) / pSize).r; // Fog Intensity
 
     // Red is Shadows
     if (cPix.r == 1)
@@ -143,7 +145,7 @@ void main()
             return;
         }
 
-        out_color = pS;
+        out_color = mix(pS, pF, s.layer == 0 ? 0 : pFI);
         return;
     }
     // Blue is Highlights
@@ -160,10 +162,10 @@ void main()
             return;
         }
 
-        out_color = pH;
+        out_color = mix(pH, pF, s.layer == 0 ? 0 : pFI);
         return;
     }
 
     // Everything else is Base
-    out_color = pB;
+    out_color = mix(pB, pF, s.layer == 0 ? 0 : pFI);
 }

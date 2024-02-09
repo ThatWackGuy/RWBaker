@@ -2,15 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using RWBaker.GeneralTools;
+using RWBaker.Gui;
+using RWBaker.Palettes;
+using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
 using Veldrid;
 using Veldrid.SPIRV;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Rendering;
 
 public class RWScene : IDisposable
 {
+    public PaletteManager Palettes => Program.PaletteManager;
+
     public uint Width { get; private set; }
     public uint Height { get; private set; }
 
@@ -25,7 +29,7 @@ public class RWScene : IDisposable
 
     private DeviceBuffer vertexBuffer;
     private DeviceBuffer indexBuffer;
-    
+
     public Framebuffer ObjectFramebuffer { get; private set; }
     private Framebuffer shadowFramebuffer;
     private readonly CommandList commandList;
@@ -38,7 +42,7 @@ public class RWScene : IDisposable
     public Matrix4x4 Transform { get; private set; }
     public int ShadowRepeat;
 
-    public RWScene()
+    public RWScene(uint width = 1, uint height = 1)
     {
         graphicsDevice = GuiManager.GraphicsDevice;
 
@@ -50,43 +54,10 @@ public class RWScene : IDisposable
         vertexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.VertexBuffer)); // 32 * const
         indexBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.IndexBuffer)); // 4 * const
 
-        Width = 1;
-        Height = 1;
-        
-        RecreateTextures(factory);
-        RecreatePipelines(factory);
-
-        commandList = factory.CreateCommandList();
-        ShadowRepeat = 1;
-    }
-
-    public void Resize(uint width, uint height)
-    {
         Width = width;
         Height = height;
 
-        ResourceFactory factory = graphicsDevice.ResourceFactory;
-
-        RecreateTextures(factory);
-        RecreatePipelines(factory);
-    }
-
-    public void Resize(IRWRenderable renderable)
-    {
-        Vector2Int size = renderable.GetRenderSize(this);
-
-        Width = (uint)size.X;
-        Height = (uint)size.Y;
-
-        ResourceFactory factory = graphicsDevice.ResourceFactory;
-
-        RecreateTextures(factory);
-        RecreatePipelines(factory);
-    }
-
-    private void RecreateTextures(ResourceFactory factory)
-    {
-        ObjectRender?.Dispose();
+        // Textures
         Texture objectTarget = factory.CreateTexture(
             new TextureDescription(
                 Width,
@@ -101,7 +72,6 @@ public class RWScene : IDisposable
         );
         ObjectRender = GuiTexture.Create("RWScene Object Texture", objectTarget);
 
-        renderObjectStencil?.Dispose();
         renderObjectStencil = factory.CreateTexture(
             new TextureDescription(
                 Width,
@@ -116,7 +86,6 @@ public class RWScene : IDisposable
         );
         renderObjectStencil.Name = "RWScene Object Depth Texture";
 
-        ShadowRender?.Dispose();
         Texture shadowTarget = factory.CreateTexture(
             new TextureDescription(
                 Width,
@@ -130,10 +99,7 @@ public class RWScene : IDisposable
             )
         );
         ShadowRender = GuiTexture.Create("RWScene Shadow Texture", shadowTarget);
-    }
 
-    private void RecreatePipelines(ResourceFactory factory)
-    {
         ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
         ObjectFramebuffer.Name = "Object Framebuffer";
 
@@ -145,7 +111,101 @@ public class RWScene : IDisposable
             Width,
             Height,
             0,
+            1,
+            -31
+        );
+
+        commandList = factory.CreateCommandList();
+        ShadowRepeat = 1;
+    }
+
+    public void Resize(uint width, uint height)
+    {
+        Width = width;
+        Height = height;
+
+        Recreate(graphicsDevice.ResourceFactory);
+    }
+
+    public void Resize(IRWRenderable renderable)
+    {
+        Vector2Int size = renderable.GetRenderSize(this);
+
+        Width = (uint)size.X;
+        Height = (uint)size.Y;
+
+        Recreate(graphicsDevice.ResourceFactory);
+    }
+
+    private void Recreate(ResourceFactory factory)
+    {
+        // dispose completely halts graphics if we don't wait
+        graphicsDevice.WaitForIdle();
+
+        // Get rid of old resources
+        ObjectFramebuffer.Dispose();
+        shadowFramebuffer.Dispose();
+
+        ObjectRender.Dispose();
+        renderObjectStencil.Dispose();
+        ShadowRender.Dispose();
+
+        // Textures
+        Texture objectTarget = factory.CreateTexture(
+            new TextureDescription(
+                Width,
+                Height,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.RenderTarget | TextureUsage.Sampled,
+                TextureType.Texture2D
+            )
+        );
+        ObjectRender = GuiTexture.Create("RWScene Object Texture", objectTarget);
+
+        renderObjectStencil = factory.CreateTexture(
+            new TextureDescription(
+                Width,
+                Height,
+                1,
+                1,
+                1,
+                PixelFormat.D24_UNorm_S8_UInt,
+                TextureUsage.DepthStencil,
+                TextureType.Texture2D
+            )
+        );
+        renderObjectStencil.Name = "RWScene Object Depth Texture";
+
+        Texture shadowTarget = factory.CreateTexture(
+            new TextureDescription(
+                Width,
+                Height,
+                1,
+                1,
+                1,
+                PixelFormat.R8_G8_B8_A8_UNorm,
+                TextureUsage.RenderTarget | TextureUsage.Sampled,
+                TextureType.Texture2D
+            )
+        );
+        ShadowRender = GuiTexture.Create("RWScene Shadow Texture", shadowTarget);
+
+        // Framebuffers
+        ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
+        ObjectFramebuffer.Name = "Object Framebuffer";
+
+        shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
+        shadowFramebuffer.Name = "Shadow Framebuffer";
+
+        Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
+            Width,
+            Height,
+            0,
+            1,
             -31
         );
     }
@@ -162,8 +222,10 @@ public class RWScene : IDisposable
         {
             desc.Dispose();
         }
-        
+
         renderItems.Clear();
+        vertexBuffer.Dispose();
+        indexBuffer.Dispose();
     }
 
     public void SetBackground(RgbaFloat color)
@@ -177,7 +239,7 @@ public class RWScene : IDisposable
         {
             0 => RgbaFloat.Clear,
             1 => RgbaFloat.White,
-            2 => PaletteManager.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
+            2 => Palettes.CurrentPalette.Image[0, rainBg ? 8 : 0].ToRgbaFloat(),
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
     }
@@ -191,11 +253,11 @@ public class RWScene : IDisposable
         for (int r = 0; r < renderItems.Count; r++)
         {
             RWRenderDescription desc = renderItems[r];
-            
+
             for (int i = 0; i < ShadowRepeat; i++)
             {
                 commandList.UpdateBuffer(desc.SceneDataBuffer, 0, desc.SceneInfo);
-                
+
                 commandList.UpdateBuffer(vertexBuffer, 0, desc.Vertices);
                 commandList.UpdateBuffer(indexBuffer, 0, desc.Indices);
 
@@ -222,7 +284,7 @@ public class RWScene : IDisposable
         for (int i = 0; i < renderItems.Count; i++)
         {
             RWRenderDescription desc = renderItems[i];
-            
+
             desc.SceneInfo.RenderingShadows = false;
             commandList.UpdateBuffer(desc.SceneDataBuffer, 0, desc.SceneInfo);
 
@@ -292,16 +354,18 @@ public class RWScene : IDisposable
 
     public void Render(bool forceUnlit)
     {
+        vertexBuffer.Dispose();
         vertexBuffer = graphicsDevice.ResourceFactory.CreateBuffer(
             new BufferDescription(
-                (uint)renderItems.Select(r => r.Vertices.Length).Sum() * 36,
+                (uint)renderItems.Select(r => r.Vertices.Length).Max() * 36,
                 BufferUsage.VertexBuffer
             )
         );
 
+        indexBuffer.Dispose();
         indexBuffer = graphicsDevice.ResourceFactory.CreateBuffer(
             new BufferDescription(
-                (uint)renderItems.Select(r => r.Indices.Length).Sum() * 4,
+                (uint)renderItems.Select(r => r.Indices.Length).Max() * 4,
                 BufferUsage.IndexBuffer
             )
         );
@@ -359,7 +423,7 @@ public class RWScene : IDisposable
     {
         graphicsDevice.WaitForIdle();
         ClearScene();
-        
+
         ObjectRender.Dispose();
         renderObjectStencil.Dispose();
         ObjectFramebuffer.Dispose();
@@ -369,9 +433,9 @@ public class RWScene : IDisposable
 
         vertexBuffer.Dispose();
         indexBuffer.Dispose();
-        
+
         commandList.Dispose();
-        
+
         GC.SuppressFinalize(this);
     }
 }

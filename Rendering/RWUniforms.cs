@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using RWBaker.GeneralTools;
-using RWBaker.TileTools;
+using RWBaker.RWObjects;
+using RWBaker.Tiles;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Rendering;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWSceneInfo
@@ -17,12 +17,12 @@ public struct RWSceneInfo
     public float CurrentRepeat;
     public readonly float MaxRepeat;
     public readonly float PADDING = 0f;
-    
+
     public readonly Vector2 LightOffset;
     public readonly Vector2 ShadowTexSize;
 
     public readonly Vector2 RenderableTexSize;
-    
+
     public readonly Vector2 EffectColorsTexSize;
     public readonly float EffectA;
     public readonly float EffectB;
@@ -47,11 +47,11 @@ public struct RWSceneInfo
         // 16 bytes total
 
         RenderableTexSize = renderable.GetTextureSize(); // 8
-        EffectColorsTexSize = PaletteManager.EffectColors.Size; // 8
+        EffectColorsTexSize = scene.Palettes.EffectColors.Size; // 8
         // 16 bytes total
 
-        EffectA = PaletteManager.Context.EffectColorA; // 4
-        EffectB = PaletteManager.Context.EffectColorB; // 4
+        EffectA = scene.Palettes.EffectColorA; // 4
+        EffectB = scene.Palettes.EffectColorB; // 4
         // 8 bytes total
     }
 }
@@ -65,12 +65,12 @@ public struct RWTileRenderUniform
     public readonly int UseRainPalette;
     public readonly int IsBox;
 
-    public RWTileRenderUniform(Tile tile)
+    public RWTileRenderUniform(CachedTile cachedTile)
     {
-        TileSize = (Vector2)tile.Size;
-        BufferTiles = tile.BufferTiles;
-        Vars = tile.Variants;
-        UseRainPalette = tile.UseRainPalette ? 1 : 0;
-        IsBox = tile.Type == TileType.Box ? 1 : 0;
+        TileSize = (Vector2)cachedTile.Size;
+        BufferTiles = cachedTile.BufferTiles;
+        Vars = cachedTile.Variants;
+        UseRainPalette = cachedTile.UseRainPalette ? 1 : 0;
+        IsBox = cachedTile.Type == TileType.Box ? 1 : 0;
     }
 }

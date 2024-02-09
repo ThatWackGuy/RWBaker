@@ -2,7 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Veldrid;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Rendering;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWVertexData

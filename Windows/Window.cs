@@ -1,29 +1,28 @@
 using System;
 using ImGuiNET;
-using RWBaker.GraphicsTools;
+using RWBaker.Gui;
 
-namespace RWBaker;
+namespace RWBaker.Windows;
 
 public abstract class Window : IDisposable
 {
-    public string DisplayName;
+    public string DisplayName { get; private set; }
     public readonly string InternalIdentifier;
-    public bool Open;
-    
-    protected readonly Context context;
+
+    protected bool open;
 
     protected Window(string displayName, string internalIdentifier)
     {
         DisplayName = displayName;
         InternalIdentifier = internalIdentifier;
-        context = Program.Context;
+        open = true;
     }
 
     protected abstract void Draw();
 
     public virtual void Update()
     {
-        if (!Open)
+        if (!open)
         {
             GuiManager.RemoveWindow(this);
             return;
@@ -31,24 +30,24 @@ public abstract class Window : IDisposable
 
         Draw();
     }
-    
+
     protected abstract void Destroy();
 
     protected void Begin()
     {
-        ImGui.Begin(DisplayName, ref Open);
+        ImGui.Begin(DisplayName, ref open);
     }
 
     protected void Begin(ImGuiWindowFlags flags)
     {
-        ImGui.Begin(DisplayName, ref Open, flags);
+        ImGui.Begin(DisplayName, ref open, flags);
     }
-    
+
     protected void BeginNoClose()
     {
         ImGui.Begin(DisplayName);
     }
-    
+
     protected void BeginNoClose(ImGuiWindowFlags flags)
     {
         ImGui.Begin(DisplayName, flags);

@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 
-namespace RWBaker.GraphicsTools;
+namespace RWBaker.Gui;
 
 public class GuiTexture : IDisposable
 {
-    private static readonly Dictionary<IntPtr, GuiTexture> _map = new();
+    private static readonly Dictionary<IntPtr, GuiTexture> _mapByIdx = new();
+    private static readonly Dictionary<string, GuiTexture> _mapByName = new();
     private static IntPtr _nextIndex = 1;
 
     public readonly string Name;
@@ -64,12 +67,15 @@ public class GuiTexture : IDisposable
 
     public static GuiTexture Create(string name, Texture texture, ResourceLayout? textureLayout = null)
     {
+        if (_mapByName.ContainsKey(name)) throw new DuplicateNameException($"Texture with name '{name}' already exists");
+
         GuiTexture tex = new(name, texture, textureLayout ?? GuiManager.TextureLayout, _nextIndex);
-        _map.Add(_nextIndex, tex);
+        _mapByIdx.Add(_nextIndex, tex);
+        _mapByName.Add(name, tex);
         _nextIndex++;
         return tex;
     }
-    
+
     public static GuiTexture CreateFromImage(string name, Image<Rgba32> image, ResourceLayout? textureLayout = null)
     {
         Texture texture = GuiManager.ResourceFactory.CreateTexture(
@@ -84,12 +90,12 @@ public class GuiTexture : IDisposable
                 TextureType.Texture2D
             )
         );
-        
+
         GuiManager.UpdateTextureFromImage(texture, image);
 
         return Create(name, texture, textureLayout);
     }
-    
+
     public static GuiTexture CreateFromImage(string name, string path, ResourceLayout? textureLayout = null)
     {
         Image<Rgba32> image = Image.Load<Rgba32>(path);
@@ -106,12 +112,12 @@ public class GuiTexture : IDisposable
                 TextureType.Texture2D
             )
         );
-        
+
         GuiManager.UpdateTextureFromImage(texture, image);
 
         return Create(name, texture, textureLayout);
     }
-    
+
     public static GuiTexture CreateFromImage(string name, ReadOnlySpan<byte> bytes, ResourceLayout? textureLayout = null)
     {
         Image<Rgba32> image = Image.Load<Rgba32>(bytes);
@@ -128,25 +134,39 @@ public class GuiTexture : IDisposable
                 TextureType.Texture2D
             )
         );
-        
+
         GuiManager.UpdateTextureFromImage(texture, image);
 
         return Create(name, texture, textureLayout);
     }
 
-    public static GuiTexture GetTexture(IntPtr index)
+    public static GuiTexture GetTextureSafe(IntPtr index)
     {
-        return _map.TryGetValue(index, out GuiTexture? texture) ? texture : GuiManager.MissingTex;
+        return _mapByIdx.TryGetValue(index, out GuiTexture? texture) ? texture : GuiManager.MissingTex;
     }
+
+    public static bool TryGetTexture(IntPtr index, [MaybeNullWhen(false)] out GuiTexture texture)
+    {
+        return _mapByIdx.TryGetValue(index, out texture);
+    }
+
+    public static bool TryGetTexture(string name, [MaybeNullWhen(false)] out GuiTexture texture)
+    {
+        return _mapByName.TryGetValue(name, out texture);
+    }
+
+    public static bool TextureExists(IntPtr index) => _mapByIdx.ContainsKey(index);
+    public static bool TextureExists(string name) => _mapByName.ContainsKey(name);
 
     public static void DisposeAllTextures()
     {
-        foreach (var texture in _map)
+        foreach (var texture in _mapByIdx)
         {
             texture.Value.Dispose();
         }
-        
-        _map.Clear();
+
+        _mapByIdx.Clear();
+        _mapByName.Clear();
     }
 
     public void Dispose()
@@ -154,9 +174,10 @@ public class GuiTexture : IDisposable
         _resourceSet?.Dispose();
         _view?.Dispose();
         Texture.Dispose();
-        
-        _map.Remove(Index);
-        
+
+        _mapByIdx.Remove(Index);
+        _mapByName.Remove(Name);
+
         GC.SuppressFinalize(this);
     }
 }

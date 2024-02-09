@@ -27,7 +27,7 @@ public static class ImageUtils
             for (int y = 0; y < image.Height; y++)
             {
                 Rgba32 cPix = image[x, y];
-            
+
                 if (cPix == colorGet)
                 {
                     image[x, y] = colorSet;
@@ -46,21 +46,21 @@ public static class ImageUtils
             }
         }
     }
-    
-    public static void CopyAreaMix(this Image<Rgba32> source, Image<Rgba32> destination, Vector2Int srcPos, Vector2Int dstPos, Vector2Int size, float topPercentage, float bottomPercentage)
+
+    public static void CopyAreaMix(this Image<Rgba32> source, Image<Rgba32> destination, Vector2Int srcPos, Vector2Int dstPos, Vector2Int size, float amount)
     {
         for (int x = 0; x < size.X; x++)
         {
             for (int y = 0; y < size.Y; y++)
             {
                 if (source[srcPos.X + x, srcPos.Y + y] == new Rgba32(0)) continue;
-                
-                destination[dstPos.X + x, dstPos.Y + y] = destination[dstPos.X + x, dstPos.Y + y].MixRGB(source[srcPos.X + x, srcPos.Y + y], topPercentage, bottomPercentage);
+
+                destination[dstPos.X + x, dstPos.Y + y] = destination[dstPos.X + x, dstPos.Y + y].MixRGB(source[srcPos.X + x, srcPos.Y + y], amount);
             }
         }
     }
-    
-    public static Image<Rgba32> ImageMix(Image<Rgba32> top, Image<Rgba32> bottom, Vector2Int size, float topPercentage, float bottomPercentage)
+
+    public static Image<Rgba32> ImageMix(Image<Rgba32> top, Image<Rgba32> bottom, Vector2Int size, float amount)
     {
         Image<Rgba32> outImg = new Image<Rgba32>(size.X, size.Y);
 
@@ -68,27 +68,21 @@ public static class ImageUtils
         {
             for (int y = 0; y < size.Y; y++)
             {
-                outImg[x, y] = MixRGB(top[x, y], bottom[x, y], topPercentage, bottomPercentage);
+                outImg[x, y] = MixRGB(top[x, y], bottom[x, y], amount);
             }
         }
 
         return outImg;
     }
 
-    public static Rgba32 MixRGB(this Rgba32 top, Rgba32 bottom, float topA, float bottomA)
+    public static Rgba32 MixRGB(this Rgba32 top, Rgba32 bottom, float amount)
     {
         Vector4 topC = top.ToVector4();
         Vector4 bottomC = bottom.ToVector4();
-        Vector4 mixed = topC * topA + bottomC * bottomA * (1 - topA);
+        Vector4 mixed = Vector4.One * (topC * amount + bottomC * (1 - amount));
+        mixed.W = 1;
 
         return new Rgba32(mixed);
-    }
-    
-    public static void Expand(ref Image<Rgba32> originImage, int newWidth, int newHeight)
-    {
-        Image<Rgba32> newImage = new(int.Max(originImage.Width, newWidth), int.Max(originImage.Height, newHeight));
-        originImage.CopyArea(newImage, Vector2Int.Zero, Vector2Int.Zero, originImage.IntSize());
-        originImage = newImage;
     }
 
     public static Image<Rgba32> ToImage(GraphicsDevice device, Texture texture)
