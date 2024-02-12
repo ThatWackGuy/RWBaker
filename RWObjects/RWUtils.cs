@@ -18,6 +18,8 @@ public static class RWUtils
 
     public static ShaderSetDescription TileRendererShaderSet;
 
+    public static ShaderSetDescription StandardPropRendererShaderSet;
+
     public static void LoadGraphicsResources()
     {
         ResourceFactory factory = GuiManager.ResourceFactory;
@@ -67,6 +69,13 @@ public static class RWUtils
         Shader[] TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
 
         TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, TileShaders);
+
+        // PROPS
+        ShaderDescription standardVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.standardprop.vert"), "main");
+        ShaderDescription standardFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.standardprop.frag"), "main");
+        Shader[] StandardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
+
+        StandardPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, StandardPropShaders);
     }
 
     public static bool LingoBool(string line, out bool value)

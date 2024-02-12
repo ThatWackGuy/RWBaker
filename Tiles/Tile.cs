@@ -1,14 +1,9 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
-using RWBaker.Rendering;
 using RWBaker.RWObjects;
-using Veldrid;
 
 namespace RWBaker.Tiles;
 

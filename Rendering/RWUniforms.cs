@@ -74,3 +74,27 @@ public struct RWTileRenderUniform
         IsBox = cachedTile.Type == TileType.Box ? 1 : 0;
     }
 }
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RWStandardPropRenderUniform
+{
+    public readonly Vector2 PixelSize;
+    public readonly int Vars;
+    public readonly int Bevel;
+    public readonly int Colored;
+    public readonly int UseRainPalette;
+
+    public RWStandardPropRenderUniform(Vector2 size, int variants, int bevel, bool colored, bool rain)
+    {
+        PixelSize = size;
+        Vars = variants;
+        Bevel = bevel;
+        Colored = colored ? 1 : 0;
+        UseRainPalette = rain ? 1 : 0;
+    }
+
+    public void Update()
+    {
+
+    }
+}
