@@ -65,7 +65,7 @@ void main()
     // Get pixel to be evaluated
     vec4 cPix = texture(tex, f_texCoord / s.texSize);
 
-    // Black, white and transparent are skipped
+    // white and transparent are skipped
     if (cPix.a == 0 || cPix == vec4(1))
     {
         discard;

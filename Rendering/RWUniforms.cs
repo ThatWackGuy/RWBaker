@@ -120,3 +120,20 @@ public struct RWSoftPropRenderUniform
         UseRainPalette = rain ? 1 : 0;
     }
 }
+
+
+// Used in decals and antimatter
+[StructLayout(LayoutKind.Sequential)]
+public struct RWBasicPropRenderUniform
+{
+    public readonly Vector2 PixelSize;
+    public readonly int Vars;
+    public readonly int UseRainPalette;
+
+    public RWBasicPropRenderUniform(Vector2 size, int variants, bool rain)
+    {
+        PixelSize = size;
+        Vars = variants;
+        UseRainPalette = rain ? 1 : 0;
+    }
+}
