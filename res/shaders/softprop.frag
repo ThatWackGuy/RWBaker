@@ -22,9 +22,13 @@ layout(set = 0, binding = 0, std140) uniform SceneInfo
 layout(set = 0, binding = 1, std140) uniform RenderData
 {
     vec2 pixelSize;
-    float vars;
-    uint bevel;
+    uint vars;
     uint color;
+    uint shadeRepeat;
+    float contourExponent;
+    float highlightMin;
+    float shadowMin;
+    float highlightExponent;
     uint pRain;
 } d;
 
@@ -39,44 +43,42 @@ layout(location = 2) in float f_shLayer;
 
 layout(location = 0) out vec4 out_color;
 
+float depth(vec2 pos)
+{
+    vec4 px = texture(tex, pos / s.texSize);
+
+    if (px.g > 0)
+    {
+        return px.g;
+    }
+        
+    if (px.b > 0)
+    {
+        return px.b;
+    }
+        
+    return px.r;
+}
+
 void main()
 {
     // Get pixel to be evaluated
-    vec4 cPix;
-
-    // bevel props
-    if (d.bevel > 0)
-    {
-        vec4 black = vec4(0, 0, 0, 1);
-        vec4 h = texture(tex, (f_texCoord - d.bevel) / s.texSize); // highlights
-        vec4 b = texture(tex, f_texCoord / s.texSize); // base
-        vec4 s = texture(tex, (f_texCoord + d.bevel) / s.texSize); // shadows
-
-        if (b == vec4(1)) discard;
-
-        // highlighted
-        if (h != black && b == b)
-        {
-            cPix = vec4(0, 0, 1, 1);
-        }
-        // shadowed
-        else if (s != black && b == b)
-        {
-            cPix = vec4(1, 0, 0, 1);
-        }
-        // base
-        else
-        {
-            cPix = vec4(0, 1, 0, 1);
-        }
-    }
-    else
-    {
-        cPix = texture(tex, f_texCoord / s.texSize); // normal standard prop
-    }
+    vec4 cPix = texture(tex, f_texCoord / s.texSize);
 
     // Black, white and transparent are skipped
-    if (cPix.a == 0 || cPix == vec4(1) || cPix == vec4(0, 0, 0, 1))
+    if (cPix.a == 0 || cPix == vec4(1))
+    {
+        discard;
+    }
+
+    // see: renderProps.lingo
+    float dpth = depth(f_texCoord);
+    float dpthRemove = pow(1 - dpth, d.contourExponent) * s.layerCount;
+
+    float renderFrom = round(clamp(dpthRemove, 0, 30));
+    float renderTo = round(clamp(mix(s.layerCount, dpthRemove, cPix.r), 0, 30));
+
+    if (f_layer < renderFrom || f_layer > renderTo)
     {
         discard;
     }
@@ -88,8 +90,46 @@ void main()
         return;
     }
 
+    vec4 palCol = vec4(0, 1, 0, 1); // green
+
+    if (d.shadeRepeat > -1)
+    {
+        float ang = 0;
+        for (int shadeOffset = 1; shadeOffset <= d.shadeRepeat; shadeOffset++)
+        {
+            // (1, 0) + (1, 1) + (0, 1)
+            ang += (dpth - depth(vec2(f_texCoord.x - shadeOffset, f_texCoord.y)) + (depth(vec2(f_texCoord.x + shadeOffset, f_texCoord.y)) - dpth))
+                +  (dpth - depth(vec2(f_texCoord.x - shadeOffset, f_texCoord.y - shadeOffset)) + (depth(vec2(f_texCoord.x + shadeOffset, f_texCoord.y + shadeOffset)) - dpth))
+                +  (dpth - depth(vec2(f_texCoord.x, f_texCoord.y - shadeOffset)) + (depth(vec2(f_texCoord.x, f_texCoord.y + shadeOffset)) - dpth));
+        }
+        ang /= d.shadeRepeat * 3.0;
+
+        if (ang * 10 * pow(dpth, d.highlightExponent) > d.highlightMin)
+        {
+            palCol = vec4(0, 0, 1, 1); // blue because highlights, duh
+            
+        }
+        else if(-ang * 10 > d.shadowMin)
+        {
+            palCol = vec4(1, 0, 0, 0); // red because shadows
+        }
+    }
+    else
+    {
+        if(cPix.b > (1.0 / 3.0) * 2.0)
+        {
+            palCol = vec4(0, 0, 1, 1);
+        }
+        else if(cPix.b < 1 / 3.0)
+        {
+            palCol = vec4(1, 0, 0, 1);
+        }
+    }
+
+    cPix = palCol;
+
     // Check if pixel is unlit
-    float paletteOffset = d.pRain == 1 ? 10 : 2;
+    float paletteOffset = d.pRain == 1 ? 9.5 : 1.5;
     float effectOffset = d.pRain == 1 ? 2 : 0;
     if (f_shLayer > texture(sTex, gl_FragCoord.xy / s.shSize).r)
     {
@@ -111,8 +151,8 @@ void main()
     float coloredPer = 0;
     if (d.color == 1)
     {
-        colored = texture(tex, vec2(f_texCoord.x + d.pixelSize.x, f_texCoord.y) / s.texSize);
-        coloredPer = .5; // just eyeballing it, don't expect much precision
+        colored = texture(tex, vec2(f_texCoord.x, f_texCoord.y + d.pixelSize.y) / s.texSize);
+        coloredPer = .5;
     }
 
     // Red is Shadows

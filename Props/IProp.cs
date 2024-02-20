@@ -34,6 +34,7 @@ public enum PropTag
 public interface IProp
 {
     public delegate DeviceBuffer UniformConstructor(CachedProp prop);
+    public delegate Vector2 TexPosCalculator(int variation, int layer);
 
     public Vector3 CategoryColor();
 
@@ -45,14 +46,15 @@ public interface IProp
     public string Warnings();
 
     public UniformConstructor GetUniform();
+    public TexPosCalculator GetTexPos();
+
+    public ShaderSetDescription ShaderSetDescription();
 
     public Vector2Int Size();
 
     public int[] RepeatLayers();
 
     public int Variants();
-
-    public Texture Texture(RWObjectManager manager);
 
     public void LogWarning(string warn);
 }

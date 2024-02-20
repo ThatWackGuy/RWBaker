@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using RWBaker.Gui;
 using RWBaker.Palettes;
 using RWBaker.Props;
-using RWBaker.RWObjects;
 using RWBaker.Tiles;
 using RWBaker.Windows;
 using Veldrid;

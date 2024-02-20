@@ -330,8 +330,6 @@ public static class GuiManager
                 0,
                 0
             );
-
-            handle.Dispose();
         }
     }
 
@@ -419,7 +417,6 @@ public static class GuiManager
     }
 
     // Below is dedicated to ImGui
-    // DO NOT TOUCH, BLACK MAGIC
     public static void Render(CommandList cl)
     {
         frameBegun = false;
@@ -446,7 +443,8 @@ public static class GuiManager
         ImGuiIOPtr io = ImGui.GetIO();
         io.DisplaySize = new Vector2(
             WindowWidth / ScaleFactor.X,
-            WindowHeight / ScaleFactor.Y);
+            WindowHeight / ScaleFactor.Y
+        );
         io.DisplayFramebufferScale = ScaleFactor;
         io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
     }

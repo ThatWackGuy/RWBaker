@@ -1,9 +1,5 @@
 using System;
-using System.IO;
-using System.Numerics;
-using System.Text.RegularExpressions;
 using RWBaker.Gui;
-using RWBaker.Tiles;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -19,6 +15,7 @@ public static class RWUtils
     public static ShaderSetDescription TileRendererShaderSet;
 
     public static ShaderSetDescription StandardPropRendererShaderSet;
+    public static ShaderSetDescription SoftPropRendererShaderSet;
 
     public static void LoadGraphicsResources()
     {
@@ -76,6 +73,12 @@ public static class RWUtils
         Shader[] StandardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
 
         StandardPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, StandardPropShaders);
+
+        ShaderDescription softVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.softprop.vert"), "main");
+        ShaderDescription softFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.softprop.frag"), "main");
+        Shader[] SoftPropShaders = factory.CreateFromSpirv(softVert, softFrag);
+
+        SoftPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, SoftPropShaders);
     }
 
     public static bool LingoBool(string line, out bool value)
@@ -100,7 +103,7 @@ public static class RWUtils
     {
         try
         {
-            value = Convert.ToSingle(line);
+            value = Convert.ToSingle(line.Replace('.', ','));
             return true;
         }
         catch (Exception)

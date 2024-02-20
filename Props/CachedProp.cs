@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using RWBaker.Gui;
@@ -16,6 +17,8 @@ public class CachedProp : IRWRenderable, IDisposable
     public readonly Vector2Int PixelSize;
 
     private readonly IProp.UniformConstructor _uniformConstructor;
+    private readonly IProp.TexPosCalculator _texPosCalculator;
+    private readonly ShaderSetDescription _shaderSet;
 
     public readonly int Variants;
     private int _renderVariation;
@@ -34,7 +37,7 @@ public class CachedProp : IRWRenderable, IDisposable
     {
         get => _renderSubLayer;
 
-        set => _renderSubLayer = int.Clamp(value, 0, 29 - Depth);
+        set => _renderSubLayer = int.Clamp(value, 0, 30 - Depth);
     }
 
     public readonly Texture CachedTexture;
@@ -44,7 +47,7 @@ public class CachedProp : IRWRenderable, IDisposable
         Name = "";
         ProperName = "";
 
-        _uniformConstructor = _ => throw new Exception("This wasn't supposed to happen!");
+        _uniformConstructor = _ => throw new Exception();
 
         renderRepeatLayers = new[] { 1 };
 
@@ -62,7 +65,16 @@ public class CachedProp : IRWRenderable, IDisposable
         Name = cache.Name();
         ProperName = cache.ProperName();
 
+        string texturePath = Path.Combine(manager.PropsDir, $"{Name}.png");
+
+        if (!File.Exists(texturePath))
+        {
+            throw new FileNotFoundException("Please check the names or if the file has been deleted!");
+        }
+
         _uniformConstructor = cache.GetUniform();
+        _texPosCalculator = cache.GetTexPos();
+        _shaderSet = cache.ShaderSetDescription();
 
         renderRepeatLayers = cache.RepeatLayers();
 
@@ -96,7 +108,7 @@ public class CachedProp : IRWRenderable, IDisposable
 
         Depth = renderRepeatLayers.Sum();
 
-        CachedTexture = cache.Texture(manager);
+        CachedTexture = GuiManager.TextureFromImage(texturePath);
     }
 
     public RWRenderDescription GetSceneInfo(RWScene scene)
@@ -113,7 +125,7 @@ public class CachedProp : IRWRenderable, IDisposable
             if (renderRepeatLayers[imgLayer] == 0) continue;
 
             // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer
-            Vector2 texPos = new(PixelSize.X * RenderVariation,  1 + imgLayer * PixelSize.Y);
+            Vector2 texPos = _texPosCalculator(RenderVariation, imgLayer);
             Vector2 texSize = (Vector2)PixelSize;
 
             for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
@@ -165,7 +177,7 @@ public class CachedProp : IRWRenderable, IDisposable
 
     public Vector2 GetTextureSize() => new(CachedTexture.Width, CachedTexture.Height);
 
-    public ShaderSetDescription GetShaderSetDescription() => RWUtils.StandardPropRendererShaderSet;
+    public ShaderSetDescription GetShaderSetDescription() => _shaderSet;
 
     public int LayerCount() => renderRepeatLayers.Sum();
     public int Layer() => _renderSubLayer;

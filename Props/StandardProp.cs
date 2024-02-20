@@ -22,17 +22,11 @@ public class StandardProp : IProp
     private string _warnings;
 
     private readonly string _category;
-
-    public readonly Vector3 _categoryColor;
+    private readonly Vector3 _categoryColor;
 
     private readonly string _name;
     private readonly string _properName;
     private readonly string _searchName;
-
-    private readonly PropColorTreatment _treatment;
-    private readonly int _bevelAmount;
-
-    private readonly bool _colorize; // on varied
 
     private readonly PropTag _tags;
 
@@ -43,6 +37,11 @@ public class StandardProp : IProp
     // standard prop fields
     private readonly Vector2Int _size;
     private readonly int[] _repeatLayers;
+
+    private readonly PropColorTreatment _treatment;
+    private readonly int _bevelAmount;
+
+    private readonly bool _colorize; // on varied
 
     public StandardProp(RWObjectManager manager, PropType type, string line, string category, Vector3 categoryColor)
     {
@@ -78,12 +77,12 @@ public class StandardProp : IProp
 
         if (_repeatLayers.Length > 30)
         {
-            LogWarning($"30+ layers aren't supported! {repeatLayers.Length} layers on tile.");
+            LogWarning($"30+ layers aren't supported! {repeatLayers.Length} layers on prop.");
         }
 
         if (_repeatLayers.Sum() >= 30)
         {
-            LogWarning($"30+ sub-layers aren't supported! {_repeatLayers.Sum()} sub-layers on tile.");
+            LogWarning($"30+ sub-layers aren't supported! {_repeatLayers.Sum()} sub-layers on prop.");
         }
 
         // COLOR TREATMENT
@@ -127,7 +126,7 @@ public class StandardProp : IProp
         {
             if (!RWUtils.LingoEnum(t.Replace(" ", ""), PropTag.None, out PropTag tag))
             {
-                LogWarning($"Couldn't parse tile tag '{t}'.");
+                LogWarning($"Couldn't parse prop tag '{t}'.");
             }
 
             _tags |= tag;
@@ -145,16 +144,15 @@ public class StandardProp : IProp
 
         if (!File.Exists(manager.PropsDir + "/" + _name + ".png"))
         {
-            LogWarning("The image for the tile couldn't be found. Please check the names or if the file has been deleted.");
+            LogWarning("The image for the prop couldn't be found. Please check the names or if the file has been deleted.");
         }
 
         if (_hasWarnings)
         {
-            manager.TileLoadLogs += _properName + ":\n" + _warnings + "\n";
+            manager.PropLoadLogs += _properName + ":\n" + _warnings + "\n";
         }
     }
 
-    public string Category() => _category;
     public Vector3 CategoryColor() => _categoryColor;
 
     public string Name() => _name;
@@ -182,23 +180,15 @@ public class StandardProp : IProp
         return buffer;
     };
 
+    public IProp.TexPosCalculator GetTexPos() => (var, layer) => new Vector2(_size.X * 20 * var,  1 + layer * _size.Y * 20);
+
+    public ShaderSetDescription ShaderSetDescription() => RWUtils.StandardPropRendererShaderSet;
+
     public int Variants() => _variations;
 
     public Vector2Int Size() => _size * 20;
 
     public int[] RepeatLayers() => _repeatLayers;
-
-    public Texture Texture(RWObjectManager manager)
-    {
-        string texturePath = Path.Combine(manager.PropsDir, $"{_name}.png");
-
-        if (!File.Exists(texturePath))
-        {
-            throw new FileNotFoundException("Please check the names or if the file has been deleted!");
-        }
-
-        return GuiManager.TextureFromImage(texturePath);
-    }
 
     public void LogWarning(string warn)
     {

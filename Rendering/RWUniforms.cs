@@ -92,9 +92,31 @@ public struct RWStandardPropRenderUniform
         Colored = colored ? 1 : 0;
         UseRainPalette = rain ? 1 : 0;
     }
+}
 
-    public void Update()
+[StructLayout(LayoutKind.Sequential)]
+public struct RWSoftPropRenderUniform
+{
+    public readonly Vector2 PixelSize;
+    public readonly int Vars;
+    public readonly int Colored;
+    public readonly int SmoothShading;
+    public readonly float ContourExponent;
+    public readonly float HighlightMin;
+    public readonly float ShadowMin;
+    public readonly float DepthHighlightExponent;
+    public readonly int UseRainPalette;
+
+    public RWSoftPropRenderUniform(Vector2 size, int variants, bool colored, int smoothShading, float contourExponent, float highlightMin, float shadowMin, float depthHighlightExponent, bool rain)
     {
-
+        PixelSize = size;
+        Vars = variants;
+        Colored = colored ? 1 : 0;
+        SmoothShading = smoothShading;
+        ContourExponent = contourExponent;
+        HighlightMin = highlightMin;
+        ShadowMin = shadowMin;
+        DepthHighlightExponent = depthHighlightExponent;
+        UseRainPalette = rain ? 1 : 0;
     }
 }

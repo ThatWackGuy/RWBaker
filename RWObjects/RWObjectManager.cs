@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text.RegularExpressions;
@@ -158,13 +157,13 @@ public class RWObjectManager
                 defaultType = true;
             }
 
-            if (propType is not (PropType.Standard or PropType.VariedStandard)) continue;
+            if (propType is not (PropType.Standard or PropType.VariedStandard or PropType.Soft or PropType.VariedSoft)) continue;
 
             IProp prop = propType switch
             {
                 PropType.Standard or PropType.VariedStandard => new StandardProp(this, propType, line, lastCategory, lastColor),
-                /*PropType.Soft or PropType.SoftVaried => throw new NotImplementedException(),
-                PropType.Decal => throw new NotImplementedException(),
+                PropType.Soft or PropType.VariedSoft => new SoftProp(this, propType, line, lastCategory, lastColor),
+                /*PropType.Decal => throw new NotImplementedException(),
                 PropType.Antimatter => throw new NotImplementedException(),
 
                 _ => throw new Exception("How? See RWObjectManager.cs line 188")*/
