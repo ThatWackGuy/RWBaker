@@ -1,9 +1,5 @@
 using System;
-using System.IO;
-using System.Numerics;
-using System.Text.RegularExpressions;
 using RWBaker.Gui;
-using RWBaker.Tiles;
 using Veldrid;
 using Veldrid.SPIRV;
 
@@ -17,6 +13,11 @@ public static class RWUtils
     public static ResourceLayout RWObjectTextureLayout;
 
     public static ShaderSetDescription TileRendererShaderSet;
+
+    public static ShaderSetDescription StandardPropRendererShaderSet;
+    public static ShaderSetDescription SoftPropRendererShaderSet;
+    public static ShaderSetDescription DecalPropRendererShaderSet;
+    public static ShaderSetDescription AntimatterPropRendererShaderSet;
 
     public static void LoadGraphicsResources()
     {
@@ -64,9 +65,34 @@ public static class RWUtils
         // TILES
         ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
         ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
-        Shader[] TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
+        Shader[] tileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
 
-        TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, TileShaders);
+        TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, tileShaders);
+
+        // PROPS
+        ShaderDescription standardVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.standardprop.vert"), "main");
+        ShaderDescription standardFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.standardprop.frag"), "main");
+        Shader[] standardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
+
+        StandardPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, standardPropShaders);
+
+        ShaderDescription softVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.softprop.vert"), "main");
+        ShaderDescription softFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.softprop.frag"), "main");
+        Shader[] softPropShaders = factory.CreateFromSpirv(softVert, softFrag);
+
+        SoftPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, softPropShaders);
+
+        ShaderDescription decalVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.decalprop.vert"), "main");
+        ShaderDescription decalFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.decalprop.frag"), "main");
+        Shader[] decalPropShaders = factory.CreateFromSpirv(decalVert, decalFrag);
+
+        DecalPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, decalPropShaders);
+
+        ShaderDescription antimatterVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.vert"), "main");
+        ShaderDescription antimatterFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.frag"), "main");
+        Shader[] antimatterPropShaders = factory.CreateFromSpirv(antimatterVert, antimatterFrag);
+
+        AntimatterPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, antimatterPropShaders);
     }
 
     public static bool LingoBool(string line, out bool value)
@@ -91,7 +117,7 @@ public static class RWUtils
     {
         try
         {
-            value = Convert.ToSingle(line);
+            value = Convert.ToSingle(line.Replace('.', ','));
             return true;
         }
         catch (Exception)

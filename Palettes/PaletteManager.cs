@@ -86,7 +86,7 @@ public class PaletteManager : IDisposable
     public event PalettesChangedEvent PalettesChanged = () => { };
 
     /// <remarks>
-    ///  Before creating a new manager consider Context.Palettes
+    ///  Before creating a new manager consider Program.Palettes
     /// </remarks>
     public PaletteManager(UserData userData)
     {

@@ -21,14 +21,14 @@ layout(set = 0, binding = 0, std140) uniform SceneInfo
 
 layout(set = 0, binding = 1, std140) uniform RenderData
 {
-    vec2 tileSize;
-    int bfTiles;
-    int vars;
+    vec2 pixelSize;
+    float vars;
+    uint bevel;
+    uint color;
     uint pRain;
-    uint isBox;
 } d;
 
-layout(set = 1, binding = 0) uniform sampler2D tex; // tile texture
+layout(set = 1, binding = 0) uniform sampler2D tex; // prop texture
 layout(set = 1, binding = 1) uniform sampler2D pTex; // palette texture
 layout(set = 1, binding = 2) uniform sampler2D eTex; // effect color texture
 layout(set = 1, binding = 3) uniform sampler2D sTex; // shadow depth map
@@ -43,60 +43,36 @@ void main()
 {
     // Get pixel to be evaluated
     vec4 cPix;
-    if (d.isBox == 1)
+
+    // bevel props
+    if (d.bevel > 0)
     {
-        vec2 tileSize = d.tileSize * 20;
-        float bounds = d.bfTiles * 20;
-        vec2 bPos = f_texCoord - bounds; // Bounded Position
+        vec4 black = vec4(0, 0, 0, 1);
+        vec4 h = texture(tex, (f_texCoord - d.bevel) / s.texSize); // highlights
+        vec4 b = texture(tex, f_texCoord / s.texSize); // base
+        vec4 s = texture(tex, (f_texCoord + d.bevel) / s.texSize); // shadows
 
-        // pixels outside bounds don't matter
-        if (bPos.x < 0 || bPos.y < 0 || bPos.x > tileSize.x || bPos.y > tileSize.y) discard;
+        if (b == vec4(1)) discard;
 
-        vec2 pxCoord;
-
-        // FACE
-        if (f_layer == 0)
+        // highlighted
+        if (h != black && b == b)
         {
-            pxCoord = vec2(f_texCoord.x, d.tileSize.x * tileSize.y + f_texCoord.y);
+            cPix = vec4(0, 0, 1, 1);
         }
-        // VERTICAL
-        else if (bPos.y > 5 && bPos.y < tileSize.y - 5)
+        // shadowed
+        else if (s != black && b == b)
         {
-            if (bPos.x > 5 && bPos.x < tileSize.x - 5) discard;
-
-            // Left
-            if (bPos.x < 5)
-            {
-                pxCoord = vec2(20 + f_layer, f_texCoord.y - bounds);
-            }
-            // Right piece
-            else if (bPos.x > tileSize.x - 5 && bPos.x < tileSize.x)
-            {
-                pxCoord = vec2(30 + f_layer, (d.tileSize.x - 1) * tileSize.y + f_texCoord.y - bounds);
-            }
+            cPix = vec4(1, 0, 0, 1);
         }
-        // HORIZONTAL
+        // base
         else
         {
-            float pieceIdx = floor((f_texCoord.x - bounds) / 20);
-
-            // Top
-            if (bPos.y < 5)
-            {
-                pxCoord = vec2(mod(f_texCoord.x - bounds, 20), pieceIdx * tileSize.y + f_layer);
-            }
-            // Bottom
-            else if (bPos.y > tileSize.y - 5)
-            {
-                pxCoord = vec2(mod(f_texCoord.x - bounds, 20), pieceIdx * tileSize.y + f_layer);
-            }
+            cPix = vec4(0, 1, 0, 1);
         }
-
-        cPix = texture(tex, pxCoord / s.texSize);
     }
     else
     {
-        cPix = texture(tex, f_texCoord / s.texSize);
+        cPix = texture(tex, f_texCoord / s.texSize); // normal standard prop
     }
 
     // Black, white and transparent are skipped
@@ -123,12 +99,21 @@ void main()
 
     // Palette colors
     vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer + s.layer * 10 + .2;
+    float palX = f_layer + s.layer + .2;
     vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize); // Highlights
     vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize); // Base
     vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize); // Shadows
     vec4 pF = texture(pTex, vec2(1.2, paletteOffset - 2) / pSize); // Fog
     float pFI = texture(pTex, vec2(9.2, paletteOffset - 2) / pSize).r; // Fog Intensity
+    
+    // get colored side of the prop if it has the tag
+    vec4 colored = vec4(0);
+    float coloredPer = 0;
+    if (d.color == 1)
+    {
+        colored = texture(tex, vec2(f_texCoord.x + d.pixelSize.x, f_texCoord.y) / s.texSize);
+        coloredPer = .5; // just eyeballing it, don't expect much precision
+    }
 
     // Red is Shadows
     if (cPix.r == 1)
@@ -136,7 +121,7 @@ void main()
         // Purple is Effect A
         if (cPix.b == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * ((2 * d.bfTiles) + d.tileSize.x) + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
 
             vec4 fA = texture(eTex, vec2(s.effectA * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fA, 1 - intensity);
@@ -144,7 +129,9 @@ void main()
             return;
         }
 
-        out_color = mix(pS, pF, s.layer == 0 ? 0 : pFI);
+        out_color = mix(pS, pF, f_layer < 10 ? 0 : pFI);
+        out_color = mix(out_color, colored, coloredPer);
+        
         return;
     }
     // Blue is Highlights
@@ -153,7 +140,7 @@ void main()
         // Cyan is Effect B
         if (cPix.g == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * ((2 * d.bfTiles) + d.tileSize.x) + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
 
             vec4 fB = texture(eTex, vec2(s.effectB * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fB, 1 - intensity);
@@ -161,10 +148,13 @@ void main()
             return;
         }
 
-        out_color = mix(pH, pF, s.layer == 0 ? 0 : pFI);
+        out_color = mix(pH, pF, f_layer < 10 ? 0 : pFI);
+        out_color = mix(out_color, colored, coloredPer);
+
         return;
     }
 
     // Everything else is Base
-    out_color = mix(pB, pF, s.layer == 0 ? 0 : pFI);
+    out_color = mix(pB, pF, f_layer < 10 ? 0 : pFI);
+    out_color = mix(out_color, colored, coloredPer);
 }

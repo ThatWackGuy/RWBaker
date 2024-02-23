@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text.RegularExpressions;
@@ -15,7 +16,7 @@ public class RWObjectManager
     public string TileLoadLogs = "";
     public event ObjectsChangedEvent TilesChanged = () => { };
 
-    public readonly List<Prop> Props = new();
+    public readonly List<IProp> Props = new();
     public string PropLoadLogs = "";
     public event ObjectsChangedEvent PropsChanged = () => { };
 
@@ -40,8 +41,8 @@ public class RWObjectManager
         TileUseRain = userData.TileUseRain;
 
         PropsDir = userData.SavedPropsDir;
-        PropLastSearched = userData.SavedPropsDir;
-        PropLastUsed = userData.SavedPropsDir;
+        PropLastSearched = userData.PropLastSearched;
+        PropLastUsed = userData.PropLastUsed;
         PropUseUnlit = userData.PropUseUnlit;
         PropUseRain = userData.PropUseRain;
     }
@@ -149,8 +150,27 @@ public class RWObjectManager
                 continue;
             }
 
-            // Prop prop = new(this, line, lastCategory, lastColor);
-            // Program.Props.Add(prop);
+            // get prop type to be constructed
+            bool defaultType = false;
+            string typeStr = Regex.Match(line, "#tp *: *\"(.*?)\"").Groups[1].Value;
+            if (!RWUtils.LingoEnum(typeStr, PropType.Standard, out PropType propType))
+            {
+                defaultType = true;
+            }
+
+            IProp prop = propType switch
+            {
+                PropType.Standard or PropType.VariedStandard => new StandardProp(this, propType, line, lastCategory, lastColor),
+                PropType.Soft or PropType.VariedSoft => new SoftProp(this, propType, line, lastCategory, lastColor),
+                PropType.SimpleDecal or PropType.VariedDecal => new DecalProp(this, propType, line, lastCategory, lastColor),
+                PropType.Antimatter => new AntimatterProp(this, propType, line, lastCategory, lastColor),
+
+                _ => throw new Exception("How? See RWObjectManager.cs line 188")
+            };
+
+            if (defaultType) prop.LogWarning($"Couldn't parse tile type '{typeStr}'. Defaulting to Standard.");
+
+            Props.Add(prop);
         }
 
         PropsChanged();

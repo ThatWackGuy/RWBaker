@@ -1,19 +1,23 @@
 using System;
 using System.Numerics;
-using RWBaker.Rendering;
 using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker.Props;
 
-public enum PropColorTreatment
+public enum PropType
 {
     Standard,
-    Bevel
+    VariedStandard,
+    Soft,
+    VariedSoft,
+    SimpleDecal,
+    VariedDecal,
+    Antimatter
 }
 
 [Flags]
-public enum PropTags
+public enum PropTag
 {
     None,
     RandomRotat = 2,
@@ -27,48 +31,32 @@ public enum PropTags
     CustomColor = 512
 }
 
-public abstract class Prop : IRWRenderable
+public interface IProp
 {
-    public readonly string Category;
+    public delegate DeviceBuffer UniformConstructor(CachedProp prop);
+    public delegate Vector2 TexPosCalculator(int variation, int layer);
 
-    public readonly Vector3 CategoryColor;
+    public Vector3 CategoryColor();
 
-    public readonly string Name;
+    public string Name();
+    public string ProperName();
+    public string SearchName();
 
-    public readonly bool Colorize;
+    public bool HasWarnings();
+    public string Warnings();
 
-    public readonly PropTags Tags;
+    public UniformConstructor GetUniform();
+    public TexPosCalculator GetTexPos();
 
-    public readonly int Variations;
+    public ShaderSetDescription ShaderSetDescription();
 
-    public readonly string[] Notes;
+    public Vector2Int Size();
 
-    protected Prop(string category, Vector3 categoryColor, string name)
-    {
-        Category = category;
-        CategoryColor = categoryColor;
-        Name = name;
-        Colorize = false;
-        Tags = PropTags.None;
-        Variations = 1;
-        Notes = Array.Empty<string>();
-    }
+    public int[] RepeatLayers();
 
-    public abstract RWRenderDescription GetSceneInfo(RWScene scene);
+    public int Variants();
 
-    public abstract DeviceBuffer CreateObjectData(RWScene scene);
-
-    public abstract Vector2Int GetRenderSize(RWScene scene);
-
-    public abstract Vector2 GetTextureSize();
-
-    public abstract ShaderSetDescription GetShaderSetDescription();
-
-    public abstract int LayerCount();
-
-    public abstract int Layer();
-
-    public abstract bool GetTextureSet(RWScene scene, out ResourceSet textureSet);
+    public void LogWarning(string warn);
 }
 
 /*

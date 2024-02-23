@@ -6,7 +6,7 @@ using ImGuiNET;
 using System.Runtime.InteropServices;
 using RWBaker.Gui;
 using RWBaker.Palettes;
-using RWBaker.RWObjects;
+using RWBaker.Props;
 using RWBaker.Tiles;
 using RWBaker.Windows;
 using Veldrid;
@@ -57,6 +57,8 @@ public static class Utils
 
         if (ImGui.BeginMenu("Render"))
         {
+            ImGui.SeparatorText("TILES");
+
             if (ImGui.MenuItem("Render Single Tile"))
             {
                 GuiManager.AddWindow(new RenderSingleTiles());
@@ -65,6 +67,13 @@ public static class Utils
             if (ImGui.MenuItem("Render All Tiles"))
             {
                 GuiManager.AddWindow(new RenderAllTiles());
+            }
+
+            ImGui.SeparatorText("PROPS");
+
+            if (ImGui.MenuItem("Render Single Prop"))
+            {
+                GuiManager.AddWindow(new RenderSingleProp());
             }
 
             ImGui.EndMenu();

@@ -42,8 +42,13 @@ public class RWScene : IDisposable
     public Matrix4x4 Transform { get; private set; }
     public int ShadowRepeat;
 
+    // used for avoiding texture name collision
+    private readonly Guid id;
+
     public RWScene(uint width = 1, uint height = 1)
     {
+        id = Guid.NewGuid();
+
         graphicsDevice = GuiManager.GraphicsDevice;
 
         ResourceFactory factory = GuiManager.ResourceFactory;
@@ -70,7 +75,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ObjectRender = GuiTexture.Create("RWScene Object Texture", objectTarget);
+        ObjectRender = GuiTexture.Create($"RWScene Object Texture {id}", objectTarget);
 
         renderObjectStencil = factory.CreateTexture(
             new TextureDescription(
@@ -84,7 +89,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        renderObjectStencil.Name = "RWScene Object Depth Texture";
+        renderObjectStencil.Name = $"RWScene Object Depth Texture {id}";
 
         Texture shadowTarget = factory.CreateTexture(
             new TextureDescription(
@@ -98,13 +103,13 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ShadowRender = GuiTexture.Create("RWScene Shadow Texture", shadowTarget);
+        ShadowRender = GuiTexture.Create($"RWScene Shadow Texture {id}", shadowTarget);
 
         ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
-        ObjectFramebuffer.Name = "Object Framebuffer";
+        ObjectFramebuffer.Name = $"Object Framebuffer {id}";
 
         shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
-        shadowFramebuffer.Name = "Shadow Framebuffer";
+        shadowFramebuffer.Name = $"Shadow Framebuffer {id}";
 
         Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
@@ -163,7 +168,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ObjectRender = GuiTexture.Create("RWScene Object Texture", objectTarget);
+        ObjectRender = GuiTexture.Create($"RWScene Object Texture {id}", objectTarget);
 
         renderObjectStencil = factory.CreateTexture(
             new TextureDescription(
@@ -177,7 +182,7 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        renderObjectStencil.Name = "RWScene Object Depth Texture";
+        renderObjectStencil.Name = $"RWScene Object Depth Texture {id}";
 
         Texture shadowTarget = factory.CreateTexture(
             new TextureDescription(
@@ -191,14 +196,14 @@ public class RWScene : IDisposable
                 TextureType.Texture2D
             )
         );
-        ShadowRender = GuiTexture.Create("RWScene Shadow Texture", shadowTarget);
+        ShadowRender = GuiTexture.Create($"RWScene Shadow Texture {id}", shadowTarget);
 
         // Framebuffers
         ObjectFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ObjectRender.Texture));
-        ObjectFramebuffer.Name = "Object Framebuffer";
+        ObjectFramebuffer.Name = $"Object Framebuffer {id}";
 
         shadowFramebuffer = factory.CreateFramebuffer(new FramebufferDescription(renderObjectStencil, ShadowRender.Texture));
-        shadowFramebuffer.Name = "Shadow Framebuffer";
+        shadowFramebuffer.Name = $"Shadow Framebuffer {id}";
 
         Transform = Matrix4x4.CreateOrthographicOffCenter(
             0,
