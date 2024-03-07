@@ -111,9 +111,9 @@ public class AntimatterProp : IProp
             buffer,
             0,
             new RWBasicPropRenderUniform(
+                cached,
                 (Vector2)_size,
-                1,
-                cached.UseRainPalette
+                1
             )
         );
 

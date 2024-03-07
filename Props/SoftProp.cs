@@ -233,6 +233,7 @@ public class SoftProp : IProp
             buffer,
             0,
             new RWSoftPropRenderUniform(
+                cached,
                 (Vector2)_size,
                 _variations,
                 _colorize /*flag check to see if it is colored*/,
@@ -240,8 +241,7 @@ public class SoftProp : IProp
                 _contourExponent,
                 _highlightMin,
                 _shadowMin,
-                _highlightExponent,
-                cached.UseRainPalette
+                _highlightExponent
             )
         );
 

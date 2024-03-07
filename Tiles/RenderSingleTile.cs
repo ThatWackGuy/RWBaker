@@ -17,12 +17,12 @@ public class RenderSingleTiles : Window
     private RWObjectManager objects => Program.ObjectManager;
     private PaletteManager palettes => Program.PaletteManager;
 
-    private readonly RWScene scene;
-    private CachedTile cachedTile;
-    private IEnumerable<Tile>? searchedTiles;
+    private readonly Scene scene;
+
+    private TileObject tile;
+    private IEnumerable<TileInfo>? searchedTiles;
     private int variation;
     private int background;
-    private int layer;
     private bool needsRerender;
     private bool sceneSizeChanged;
     private long renderTime;
@@ -30,33 +30,35 @@ public class RenderSingleTiles : Window
     private int shadowRepeat;
 
     private Vector2 renderOffset;
-    private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)cachedTile.PixelSize;
+    private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)tile.PixelSize;
     private Vector2 lightOffset;
-    private Vector2 perLightOffset => (lightOffset / 100) * (Vector2)cachedTile.PixelSize;
+    private Vector2 perLightOffset => (lightOffset / 100) * (Vector2)tile.PixelSize;
 
     private readonly Vector4 rectOutlineCol;
 
     public RenderSingleTiles() : base("Render Tile", "_renderTile")
     {
+        scene = new Scene();
+
         renderOffset = Vector2.Zero;
         lightOffset = Vector2.Zero;
 
         if (objects.Tiles.Count == 0)
         {
-            cachedTile = new CachedTile(); // use empty cache
+            tile = new TileObject(); // use empty cache
         }
         else if (objects.TileLastUsed == string.Empty || objects.Tiles.All(t => t.ProperName != objects.TileLastUsed))
         {
-            cachedTile = new CachedTile(objects, objects.Tiles[0]);
+            tile = new TileObject(scene, objects, objects.Tiles[0]);
         }
         else
         {
-            cachedTile = new CachedTile(objects, objects.Tiles.First(t => t.ProperName == objects.TileLastUsed));
+            tile = new TileObject(scene, objects, objects.Tiles.First(t => t.ProperName == objects.TileLastUsed));
         }
 
-        searchedTiles = null;
+        scene.AddObject(tile);
 
-        scene = new RWScene();
+        searchedTiles = null;
 
         variation = 0;
 
@@ -81,19 +83,23 @@ public class RenderSingleTiles : Window
 
     private void TilesChanged()
     {
+        scene.RemoveObject(tile);
+        tile.Dispose();
+
         if (objects.Tiles.Count == 0)
         {
-            cachedTile = new CachedTile(); // use empty cache
+            tile = new TileObject(); // use empty cache
         }
         else if (objects.TileLastUsed == string.Empty || objects.Tiles.All(t => t.ProperName != objects.TileLastUsed))
         {
-            cachedTile = new CachedTile(objects, objects.Tiles[0]);
+            tile = new TileObject(scene, objects, objects.Tiles[0]);
         }
         else
         {
-            cachedTile = new CachedTile(objects, objects.Tiles.First(t => t.ProperName == objects.TileLastUsed));
+            tile = new TileObject(scene, objects, objects.Tiles.First(t => t.ProperName == objects.TileLastUsed));
         }
 
+        scene.AddObject(tile);
         needsRerender = true;
     }
 
@@ -101,19 +107,20 @@ public class RenderSingleTiles : Window
     {
         Stopwatch time = Stopwatch.StartNew();
 
-        cachedTile.RenderVariation = variation;
-        cachedTile.UseRainPalette = objects.TileUseRain;
-        cachedTile.RenderLayer = layer;
+        tile.RenderVariation = variation;
+        tile.Position.Z = float.Clamp(tile.Position.Z, 0, tile.HasSpecs2 ? 1 : 2);;
 
         if (sceneSizeChanged)
         {
-            scene.Resize(cachedTile);
+            scene.Resize(tile);
         }
 
         scene.ShadowRepeat = shadowRepeat;
-        scene.SetBackground(background, objects.TileUseRain);
-        scene.AddObject(cachedTile);
-        scene.Render(objects.TileUseUnlit);
+        scene.Rain = objects.TileUseRain;
+        scene.SetBackground(background);
+        scene.Unlit = objects.TileUseUnlit;
+        scene.Rain = objects.TileUseRain;
+        scene.Render();
 
         needsRerender = false;
         sceneSizeChanged = false;
@@ -140,7 +147,7 @@ public class RenderSingleTiles : Window
         }
 
         ImGui.TextDisabled(objects.GraphicsDir);
-        ImGui.TextDisabled(scene.Palettes.CurrentPalette.Name);
+        ImGui.TextDisabled(scene.PaletteManager.CurrentPalette.Name);
 
         ImGui.SeparatorText("PARAMETERS");
 
@@ -149,9 +156,9 @@ public class RenderSingleTiles : Window
             searchedTiles = objects.Tiles.Where(t => t.SearchName.Contains(objects.TileLastSearched, StringComparison.CurrentCultureIgnoreCase));
         }
 
-        if (ImGui.BeginCombo("##tile_picker", cachedTile.ProperName) && searchedTiles != null)
+        if (ImGui.BeginCombo("##tile_picker", tile.ProperName) && searchedTiles != null)
         {
-            foreach (Tile t in searchedTiles)
+            foreach (TileInfo t in searchedTiles)
             {
                 Utils.PushStyleColor(ImGuiCol.Text, t.CategoryColor);
                 ImGui.Text("|");
@@ -164,11 +171,17 @@ public class RenderSingleTiles : Window
                     ImGui.SameLine();
                 }
 
-                if (!ImGui.Selectable(t.ProperName, t.ProperName == cachedTile.ProperName)) continue;
+                if (!ImGui.Selectable(t.ProperName, t.ProperName == tile.ProperName)) continue;
                 if (!File.Exists(Path.Combine(objects.GraphicsDir, $"{t.Name}.png"))) continue;
 
-                cachedTile.Dispose();
-                cachedTile = new CachedTile(objects, t);
+                // Remove and dispose of the old cache
+                scene.RemoveObject(tile);
+                tile.Dispose();
+
+                tile = new TileObject(scene, objects, t);
+
+                // Add new cache to scene
+                scene.AddObject(tile);
                 needsRerender = true;
                 objects.TileLastUsed = t.ProperName;
             }
@@ -180,9 +193,9 @@ public class RenderSingleTiles : Window
         ImGui.Spacing();
 
         int vars = variation;
-        if (cachedTile.Variants > 1)
+        if (tile.Variants > 1)
         {
-            ImGui.SliderInt("Variant", ref variation, 0, cachedTile.Variants - 1);
+            ImGui.SliderInt("Variant", ref variation, 0, tile.Variants - 1);
         }
 
         string bgName = background switch
@@ -213,8 +226,10 @@ public class RenderSingleTiles : Window
         ImGui.Spacing();
         ImGui.Spacing();
 
-        int ly = layer;
-        ImGui.SliderInt("Layer", ref layer, 0, cachedTile.HasSpecs2 ? 1 : 2);
+        int ly = (int)tile.Position.Z;
+        int lyCheck = ly;
+        ImGui.SliderInt("Layer", ref ly, 0, tile.HasSpecs2 ? 1 : 2);
+        tile.Position.Z = ly;
 
         ImGui.Spacing();
         ImGui.Spacing();
@@ -228,22 +243,22 @@ public class RenderSingleTiles : Window
         if (ImGui.Checkbox("Use Unlit Palette", ref objects.TileUseUnlit)) needsRerender = true;
         if (ImGui.Checkbox("Use Rain Palette", ref objects.TileUseRain)) needsRerender = true;
 
-        Vector2Int rSize = cachedTile.GetRenderSize(scene);
-        if (rSize.X != scene.Width || rSize.Y != scene.Height)
+        Vector2Int rSize = tile.GetRenderSize(scene);
+        if (rSize.X != scene.Width || rSize.Y != scene.Height || perLightOffset != scene.LightAngle)
         {
             sceneSizeChanged = true;
             needsRerender = true;
         }
 
-        if (perRenderOffset != scene.ObjectOffset || perLightOffset != scene.LightOffset)
+        if (perRenderOffset != scene.ObjectOffset)
         {
             scene.ObjectOffset = perRenderOffset;
-            scene.LightOffset = perLightOffset;
+            scene.LightAngle = perLightOffset;
 
             needsRerender = true;
         }
 
-        if (bg != background || vars != variation || ly != layer || sr != shadowRepeat) needsRerender = true;
+        if (bg != background || vars != variation || lyCheck != ly || sr != shadowRepeat) needsRerender = true;
 
         ImGui.SeparatorText("RENDER");
 
@@ -259,7 +274,7 @@ public class RenderSingleTiles : Window
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory($"{objects.GraphicsDir}/Rendered/");
-            scene.SaveToFile($"{objects.GraphicsDir}/Rendered/{cachedTile.Name}.png");
+            scene.SaveToFile($"{objects.GraphicsDir}/Rendered/{tile.Name}.png");
         }
 
         ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
@@ -274,7 +289,7 @@ public class RenderSingleTiles : Window
     protected override void Destroy()
     {
         scene.Dispose();
-        cachedTile.Dispose();
+        tile.Dispose();
 
         palettes.PalettesChanged -= PalettesChanged;
         objects.TilesChanged -= TilesChanged;

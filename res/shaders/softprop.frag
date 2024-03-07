@@ -3,24 +3,26 @@
 layout(set = 0, binding = 0, std140) uniform SceneInfo
 {
     mat4 transform;  // x+ right, y+ down matrix
-    float layer;
-    float layerCount;
     vec2 objectOffset;
 
     bool isShadow;
-    float shadowRepeatCurrent;
-    float shadowRepeatMax;
+    uint shadowRepeatCurrent;
+    uint shadowRepeatMax;
     vec2 lightOffset;
     vec2 shSize; // shadow texture size
 
-    vec2 texSize;
     vec2 effectColorsSize;
-    float effectA;
-    float effectB;
+    uint effectA;
+    uint effectB;
 } s;
 
 layout(set = 0, binding = 1, std140) uniform RenderData
 {
+    float startingZ;
+    float layerCount;
+    vec2 texSize;
+
+    mat4 rotate;
     vec2 pixelSize;
     uint vars;
     uint color;
@@ -40,12 +42,13 @@ layout(set = 1, binding = 3) uniform sampler2D sTex; // shadow depth map
 layout(location = 0) in vec2 f_texCoord;
 layout(location = 1) flat in int f_layer;
 layout(location = 2) in float f_shLayer;
+layout(location = 3) in float f_localZ;
 
 layout(location = 0) out vec4 out_color;
 
 float depth(vec2 pos)
 {
-    vec4 px = texture(tex, pos / s.texSize);
+    vec4 px = texture(tex, pos / d.texSize);
 
     if (px.g > 0)
     {
@@ -63,7 +66,7 @@ float depth(vec2 pos)
 void main()
 {
     // Get pixel to be evaluated
-    vec4 cPix = texture(tex, f_texCoord / s.texSize);
+    vec4 cPix = texture(tex, f_texCoord / d.texSize);
 
     // white and transparent are skipped
     if (cPix.a == 0 || cPix == vec4(1))
@@ -73,12 +76,12 @@ void main()
 
     // see: renderProps.lingo
     float dpth = depth(f_texCoord);
-    float dpthRemove = pow(1 - dpth, d.contourExponent) * s.layerCount;
+    float dpthRemove = pow(1 - dpth, d.contourExponent) * d.layerCount;
 
     float renderFrom = round(clamp(dpthRemove, 0, 30));
-    float renderTo = round(clamp(mix(s.layerCount, dpthRemove, cPix.r), 0, 30));
+    float renderTo = round(clamp(mix(d.layerCount, dpthRemove, cPix.r), 0, 30));
 
-    if (f_layer < renderFrom || f_layer > renderTo)
+    if (f_localZ < renderFrom || f_localZ > renderTo)
     {
         discard;
     }
@@ -139,7 +142,7 @@ void main()
 
     // Palette colors
     vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer + s.layer + .2;
+    float palX = f_layer + .2;
     vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize); // Highlights
     vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize); // Base
     vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize); // Shadows
@@ -151,7 +154,7 @@ void main()
     float coloredPer = 0;
     if (d.color == 1)
     {
-        colored = texture(tex, vec2(f_texCoord.x, f_texCoord.y + d.pixelSize.y) / s.texSize);
+        colored = texture(tex, vec2(f_texCoord.x, f_texCoord.y + d.pixelSize.y) / d.texSize);
         coloredPer = .5;
     }
 
@@ -161,7 +164,7 @@ void main()
         // Purple is Effect A
         if (cPix.b == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / d.texSize).r;
 
             vec4 fA = texture(eTex, vec2(s.effectA * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fA, 1 - intensity);
@@ -180,7 +183,7 @@ void main()
         // Cyan is Effect B
         if (cPix.g == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / d.texSize).r;
 
             vec4 fB = texture(eTex, vec2(s.effectB * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fB, 1 - intensity);

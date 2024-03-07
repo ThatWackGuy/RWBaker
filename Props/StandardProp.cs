@@ -169,11 +169,11 @@ public class StandardProp : IProp
             buffer,
             0,
             new RWStandardPropRenderUniform(
+                cached,
                 (Vector2)_size * 20,
                 _variations,
                 _bevelAmount,
-                (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/,
-                cached.UseRainPalette
+                (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/
             )
         );
 

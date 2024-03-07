@@ -175,9 +175,9 @@ public class DecalProp : IProp
             buffer,
             0,
             new RWBasicPropRenderUniform(
+                cached,
                 (Vector2)_size,
-                _variations,
-                cached.UseRainPalette
+                _variations
             )
         );
 

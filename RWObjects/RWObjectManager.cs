@@ -12,7 +12,7 @@ public class RWObjectManager
 {
     public delegate void ObjectsChangedEvent();
 
-    public readonly List<Tile> Tiles = new();
+    public readonly List<TileInfo> Tiles = new();
     public string TileLoadLogs = "";
     public event ObjectsChangedEvent TilesChanged = () => { };
 
@@ -95,8 +95,8 @@ public class RWObjectManager
                 continue;
             }
 
-            Tile tile = new(this, line, lastCategory, lastColor);
-            Tiles.Add(tile);
+            TileInfo tileObject = new(this, line, lastCategory, lastColor);
+            Tiles.Add(tileObject);
         }
 
         TilesChanged();

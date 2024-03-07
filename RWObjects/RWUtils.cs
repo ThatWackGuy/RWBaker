@@ -8,6 +8,7 @@ namespace RWBaker.RWObjects;
 public static class RWUtils
 {
     public static VertexLayoutDescription[] RWVertexLayout;
+    public static ResourceLayout[] RWResourceLayout;
 
     public static ResourceLayout RWObjectDataLayout;
     public static ResourceLayout RWObjectTextureLayout;
@@ -61,6 +62,8 @@ public static class RWUtils
                 new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
             )
         );
+
+        RWResourceLayout = new[] { RWObjectDataLayout, RWObjectTextureLayout };
 
         // TILES
         ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");

@@ -3,26 +3,28 @@
 layout(set = 0, binding = 0, std140) uniform SceneInfo
 {
     mat4 transform;  // x+ right, y+ down matrix
-    float layer;
-    float layerCount;
     vec2 objectOffset;
 
     bool isShadow;
-    float shadowRepeatCurrent;
-    float shadowRepeatMax;
+    uint shadowRepeatCurrent;
+    uint shadowRepeatMax;
     vec2 lightOffset;
     vec2 shSize; // shadow texture size
 
-    vec2 texSize;
     vec2 effectColorsSize;
-    float effectA;
-    float effectB;
+    uint effectA;
+    uint effectB;
 } s;
 
 layout(set = 0, binding = 1, std140) uniform RenderData
 {
+    float startingZ;
+    float layerCount;
+    vec2 texSize;
+
+    mat4 rotate;
     vec2 pixelSize;
-    float vars;
+    uint vars;
     uint bevel;
     uint color;
     uint pRain;
@@ -48,9 +50,9 @@ void main()
     if (d.bevel > 0)
     {
         vec4 black = vec4(0, 0, 0, 1);
-        vec4 h = texture(tex, (f_texCoord - d.bevel) / s.texSize); // highlights
-        vec4 b = texture(tex, f_texCoord / s.texSize); // base
-        vec4 s = texture(tex, (f_texCoord + d.bevel) / s.texSize); // shadows
+        vec4 h = texture(tex, (f_texCoord - d.bevel) / d.texSize); // highlights
+        vec4 b = texture(tex, f_texCoord / d.texSize); // base
+        vec4 s = texture(tex, (f_texCoord + d.bevel) / d.texSize); // shadows
 
         if (b == vec4(1)) discard;
 
@@ -72,7 +74,7 @@ void main()
     }
     else
     {
-        cPix = texture(tex, f_texCoord / s.texSize); // normal standard prop
+        cPix = texture(tex, f_texCoord / d.texSize); // normal standard prop
     }
 
     // Black, white and transparent are skipped
@@ -99,7 +101,7 @@ void main()
 
     // Palette colors
     vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer + s.layer + .2;
+    float palX = f_layer + .2;
     vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize); // Highlights
     vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize); // Base
     vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize); // Shadows
@@ -111,7 +113,7 @@ void main()
     float coloredPer = 0;
     if (d.color == 1)
     {
-        colored = texture(tex, vec2(f_texCoord.x + d.pixelSize.x, f_texCoord.y) / s.texSize);
+        colored = texture(tex, vec2(f_texCoord.x + d.pixelSize.x, f_texCoord.y) / d.texSize);
         coloredPer = .5; // just eyeballing it, don't expect much precision
     }
 
@@ -121,7 +123,7 @@ void main()
         // Purple is Effect A
         if (cPix.b == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / d.texSize).r;
 
             vec4 fA = texture(eTex, vec2(s.effectA * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fA, 1 - intensity);
@@ -140,7 +142,7 @@ void main()
         // Cyan is Effect B
         if (cPix.g == 1)
         {
-            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / s.texSize).r;
+            float intensity = texture(tex, vec2(d.vars * 20 * d.pixelSize.x + f_texCoord.x, f_texCoord.y) / d.texSize).r;
 
             vec4 fB = texture(eTex, vec2(s.effectB * 2 + (f_layer == 0 ? 0 : 1) + 0.5, effectOffset) / s.effectColorsSize);
             out_color = mix(pB, fB, 1 - intensity);

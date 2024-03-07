@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Rendering;
 using RWBaker.RWObjects;
@@ -9,16 +10,18 @@ using Veldrid;
 
 namespace RWBaker.Props;
 
-public class CachedProp : IRWRenderable, IDisposable
+public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
 {
     public readonly string Name;
     public readonly string ProperName;
-    private readonly int[] renderRepeatLayers;
+    public readonly int[] RenderRepeatLayers;
+    public readonly int LayerCount;
     public readonly Vector2Int PixelSize;
+    public float Rotation; // Rotation in radians
 
     private readonly IProp.UniformConstructor _uniformConstructor;
     private readonly IProp.TexPosCalculator _texPosCalculator;
-    private readonly ShaderSetDescription _shaderSet;
+    private readonly Pipeline _pipeline;
 
     public readonly int Variants;
     private int _renderVariation;
@@ -29,27 +32,20 @@ public class CachedProp : IRWRenderable, IDisposable
         set => _renderVariation = int.Clamp(value, 0, Variants - 1);
     }
 
-    public bool UseRainPalette;
-
     public readonly int Depth;
-    private int _renderSubLayer;
-    public int RenderSubLayer
-    {
-        get => _renderSubLayer;
-
-        set => _renderSubLayer = int.Clamp(value, 0, 30 - Depth);
-    }
 
     public readonly Texture CachedTexture;
 
-    public CachedProp()
+    public PropObject() : base(null, "")
     {
         Name = "";
         ProperName = "";
 
         _uniformConstructor = _ => throw new Exception();
+        _texPosCalculator = (_, _) => throw new Exception();
 
-        renderRepeatLayers = new[] { 1 };
+        RenderRepeatLayers = new[] { 1 };
+        LayerCount = 1;
 
         PixelSize = Vector2Int.One;
 
@@ -57,10 +53,12 @@ public class CachedProp : IRWRenderable, IDisposable
 
         Depth = 1;
 
+        _pipeline = null!;
+
         CachedTexture = GuiManager.MissingTex.Texture;
     }
 
-    public CachedProp(RWObjectManager manager, IProp cache)
+    public PropObject(Scene scene, RWObjectManager manager, IProp cache) : base(scene, cache.ProperName())
     {
         Name = cache.Name();
         ProperName = cache.ProperName();
@@ -74,27 +72,38 @@ public class CachedProp : IRWRenderable, IDisposable
 
         _uniformConstructor = cache.GetUniform();
         _texPosCalculator = cache.GetTexPos();
-        _shaderSet = cache.ShaderSetDescription();
 
-        renderRepeatLayers = cache.RepeatLayers();
+        _pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
+            new GraphicsPipelineDescription(
+                BlendStateDescription.SingleAlphaBlend,
+                new DepthStencilStateDescription(true, true, ComparisonKind.Less),
+                new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, false, false),
+                PrimitiveTopology.TriangleList,
+                cache.ShaderSetDescription(),
+                RWUtils.RWResourceLayout,
+                scene.ObjectFramebuffer.OutputDescription
+            )
+        );
 
-        if (renderRepeatLayers.Length > 30)
+        RenderRepeatLayers = cache.RepeatLayers();
+
+        if (RenderRepeatLayers.Length > 30)
         {
-            renderRepeatLayers = renderRepeatLayers[..30];
+            RenderRepeatLayers = RenderRepeatLayers[..30];
         }
 
-        if (renderRepeatLayers.Sum() >= 30)
+        if (RenderRepeatLayers.Sum() >= 30)
         {
             int check = 0;
-            for (int i = 0; i < renderRepeatLayers.Length; i++)
+            for (int i = 0; i < RenderRepeatLayers.Length; i++)
             {
-                int repeat = renderRepeatLayers[i];
+                int repeat = RenderRepeatLayers[i];
 
                 if (check + repeat > 30)
                 {
-                    renderRepeatLayers = renderRepeatLayers[..i];
-                    Array.Resize(ref renderRepeatLayers, i + 1);
-                    renderRepeatLayers[i] = 30 - check;
+                    RenderRepeatLayers = RenderRepeatLayers[..i];
+                    Array.Resize(ref RenderRepeatLayers, i + 1);
+                    RenderRepeatLayers[i] = 30 - check;
                     break;
                 }
 
@@ -102,54 +111,71 @@ public class CachedProp : IRWRenderable, IDisposable
             }
         }
 
+        LayerCount = RenderRepeatLayers.Sum();
+
         PixelSize = cache.Size();
 
         Variants = cache.Variants();
 
-        Depth = renderRepeatLayers.Sum();
+        Depth = RenderRepeatLayers.Sum();
 
         CachedTexture = GuiManager.TextureFromImage(texturePath);
     }
 
-    public RWRenderDescription GetSceneInfo(RWScene scene)
+    public void RenderInspector()
     {
-        int layerCount = renderRepeatLayers.Sum();
-        var vertices = new RWVertexData[layerCount * 4];
-        ushort[] indices = new ushort[layerCount * 6];
+        int x = (int)Position.X;
+        int y = (int)Position.Y;
+        int z = (int)Position.Z;
+        ImGui.SliderInt("X", ref x, 0, (int)Scene.Width);
+        ImGui.SliderInt("Y", ref y, 0, (int)Scene.Height);
+        ImGui.SliderInt("Layer", ref z, 0, 29 - Depth);
+
+        ImGui.SliderAngle("Rotate", ref Rotation);
+
+        Position.X = x;
+        Position.Y = y;
+        Position.Z = z;
+    }
+
+    public RenderDescription GetRenderDescription(Scene scene)
+    {
+        var vertices = new RWVertexData[LayerCount * 4];
+        ushort[] indices = new ushort[LayerCount * 6];
 
         int vertIndex = 0;
         int indexIndex = 0;
         int renderLayer = 0;
-        for (int imgLayer = 0; imgLayer < renderRepeatLayers.Length; imgLayer++)
+        for (int imgLayer = 0; imgLayer < RenderRepeatLayers.Length; imgLayer++)
         {
-            if (renderRepeatLayers[imgLayer] == 0) continue;
+            if (RenderRepeatLayers[imgLayer] == 0) continue;
 
             // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer
             Vector2 texPos = _texPosCalculator(RenderVariation, imgLayer);
             Vector2 texSize = (Vector2)PixelSize;
 
-            for (int repeat = 0; repeat < renderRepeatLayers[imgLayer]; repeat++)
+            for (int repeat = 0; repeat < RenderRepeatLayers[imgLayer]; repeat++)
             {
                 vertices[vertIndex] = new RWVertexData(
-                    new Vector3(Vector2.Zero, renderLayer),
+                    Position + new Vector3(Vector2.Zero, renderLayer),
                     texPos,
                     RgbaFloat.Clear
                 ); // Top Left
 
                 vertices[vertIndex + 1] = new RWVertexData(
-                    new Vector3(PixelSize.X, 0, renderLayer),
+                    Position + new Vector3(PixelSize.X, 0, renderLayer),
                     texPos with { X = texPos.X + texSize.X },
                     RgbaFloat.Clear
                 ); // Top Right
 
                 vertices[vertIndex + 2] = new RWVertexData(
-                    new Vector3(PixelSize.X, PixelSize.Y, renderLayer),
+                    Position + new Vector3(PixelSize.X, PixelSize.Y, renderLayer),
                     texPos + texSize,
                     RgbaFloat.Clear
                 ); // Bottom Right
 
                 vertices[vertIndex + 3] = new RWVertexData(
-                    new Vector3(0, PixelSize.Y, renderLayer),
+                    Position + new Vector3(0, PixelSize.Y, renderLayer),
                     texPos with { Y = texPos.Y + texSize.Y },
                     RgbaFloat.Clear
                 ); // Bottom Left
@@ -168,28 +194,23 @@ public class CachedProp : IRWRenderable, IDisposable
             }
         }
 
-        return new RWRenderDescription(vertices, indices, this, scene);
+        return new RenderDescription(vertices, indices, this, scene);
     }
 
-    public DeviceBuffer CreateObjectData(RWScene scene) => _uniformConstructor(this);
+    public DeviceBuffer CreateObjectData() => _uniformConstructor(this);
 
-    public Vector2Int GetRenderSize(RWScene scene) => PixelSize + (LayerCount() - 1) * Vector2.Abs(scene.ObjectOffset);
+    public Vector2Int GetRenderSize(Scene scene) => PixelSize + (LayerCount - 1) * Vector2.Abs(scene.ObjectOffset);
 
-    public Vector2 GetTextureSize() => new(CachedTexture.Width, CachedTexture.Height);
+    public Pipeline GetPipeline() => _pipeline;
 
-    public ShaderSetDescription GetShaderSetDescription() => _shaderSet;
-
-    public int LayerCount() => renderRepeatLayers.Sum();
-    public int Layer() => _renderSubLayer;
-
-    public bool GetTextureSet(RWScene scene, out ResourceSet textureSet)
+    public bool GetTextureSet(Scene scene, out ResourceSet textureSet)
     {
         textureSet = GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,
                 CachedTexture,
-                scene.Palettes.CurrentPalette.DisplayTex.Texture,
-                scene.Palettes.EffectColors.Texture,
+                scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
+                scene.PaletteManager.EffectColors.Texture,
                 scene.ShadowRender.Texture
             )
         );

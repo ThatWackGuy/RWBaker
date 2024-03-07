@@ -17,8 +17,9 @@ public class RenderSingleProp : Window
     private RWObjectManager objects => Program.ObjectManager;
     private PaletteManager palettes => Program.PaletteManager;
 
-    private readonly RWScene scene;
-    private CachedProp cachedProp;
+    private readonly Scene scene;
+
+    private PropObject prop;
     private IEnumerable<IProp>? searchedProps;
     private int variation;
     private int background;
@@ -30,33 +31,35 @@ public class RenderSingleProp : Window
     private int shadowRepeat;
 
     private Vector2 renderOffset;
-    private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)cachedProp.PixelSize;
+    private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)prop.PixelSize;
     private Vector2 lightOffset;
-    private Vector2 perLightOffset => (lightOffset / 100) * (Vector2)cachedProp.PixelSize;
+    private Vector2 perLightOffset => (lightOffset / 100) * (Vector2)prop.PixelSize;
 
     private readonly Vector4 rectOutlineCol;
 
     public RenderSingleProp() : base("Render Prop", "_renderProp")
     {
+        scene = new Scene();
+
         renderOffset = Vector2.Zero;
         lightOffset = Vector2.Zero;
 
         if (objects.Props.Count == 0)
         {
-            cachedProp = new CachedProp(); // use empty cache
+            prop = new PropObject(); // use empty cache
         }
         else if (objects.PropLastUsed == string.Empty || objects.Props.All(t => t.ProperName() != objects.PropLastUsed))
         {
-            cachedProp = new CachedProp(objects, objects.Props[0]);
+            prop = new PropObject(scene, objects, objects.Props[0]);
         }
         else
         {
-            cachedProp = new CachedProp(objects, objects.Props.First(t => t.ProperName() == objects.PropLastUsed));
+            prop = new PropObject(scene, objects, objects.Props.First(t => t.ProperName() == objects.PropLastUsed));
         }
 
-        searchedProps = null;
+        scene.AddObject(prop);
 
-        scene = new RWScene();
+        searchedProps = null;
 
         variation = 0;
 
@@ -81,18 +84,23 @@ public class RenderSingleProp : Window
 
     private void PropsChanged()
     {
+        scene.RemoveObject(prop);
+        prop.Dispose();
+
         if (objects.Props.Count == 0)
         {
-            cachedProp = new CachedProp(); // use empty cache
+            prop = new PropObject(); // use empty cache
         }
         else if (objects.PropLastUsed == string.Empty || objects.Props.All(t => t.ProperName() != objects.PropLastUsed))
         {
-            cachedProp = new CachedProp(objects, objects.Props[0]);
+            prop = new PropObject(scene, objects, objects.Props[0]);
         }
         else
         {
-            cachedProp = new CachedProp(objects, objects.Props.First(t => t.ProperName() == objects.PropLastUsed));
+            prop = new PropObject(scene, objects, objects.Props.First(t => t.ProperName() == objects.PropLastUsed));
         }
+
+        scene.AddObject(prop);
 
         needsRerender = true;
     }
@@ -101,19 +109,20 @@ public class RenderSingleProp : Window
     {
         Stopwatch time = Stopwatch.StartNew();
 
-        cachedProp.RenderVariation = variation;
-        cachedProp.UseRainPalette = objects.PropUseRain;
-        cachedProp.RenderSubLayer = layer;
+        prop.RenderVariation = variation;
 
         if (sceneSizeChanged)
         {
-            scene.Resize(cachedProp);
+            scene.Resize(prop);
         }
 
         scene.ShadowRepeat = shadowRepeat;
-        scene.SetBackground(background, objects.PropUseRain);
-        scene.AddObject(cachedProp);
-        scene.Render(objects.PropUseUnlit);
+        scene.Rain = objects.PropUseRain;
+        scene.Rain = objects.PropUseRain;
+        scene.Unlit = objects.PropUseUnlit;
+
+        scene.SetBackground(background);
+        scene.Render();
 
         needsRerender = false;
         sceneSizeChanged = false;
@@ -140,7 +149,7 @@ public class RenderSingleProp : Window
         }
 
         ImGui.TextDisabled(objects.PropsDir);
-        ImGui.TextDisabled(scene.Palettes.CurrentPalette.Name);
+        ImGui.TextDisabled(scene.PaletteManager.CurrentPalette.Name);
 
         ImGui.SeparatorText("PARAMETERS");
 
@@ -149,7 +158,7 @@ public class RenderSingleProp : Window
             searchedProps = objects.Props.Where(t => t.SearchName().Contains(objects.PropLastSearched, StringComparison.CurrentCultureIgnoreCase));
         }
 
-        if (ImGui.BeginCombo("##prop_picker", cachedProp.ProperName) && searchedProps != null)
+        if (ImGui.BeginCombo("##prop_picker", prop.ProperName) && searchedProps != null)
         {
             foreach (IProp t in searchedProps)
             {
@@ -164,11 +173,17 @@ public class RenderSingleProp : Window
                     ImGui.SameLine();
                 }
 
-                if (!ImGui.Selectable(t.ProperName(), t.ProperName() == cachedProp.ProperName)) continue;
+                if (!ImGui.Selectable(t.ProperName(), t.ProperName() == prop.ProperName)) continue;
                 if (!File.Exists(Path.Combine(objects.PropsDir, $"{t.Name()}.png"))) continue;
 
-                cachedProp.Dispose();
-                cachedProp = new CachedProp(objects, t);
+                // Remove and dispose of the old cache
+                scene.RemoveObject(prop);
+                prop.Dispose();
+
+                prop = new PropObject(scene, objects, t);
+
+                // Add new cache to scene
+                scene.AddObject(prop);
                 needsRerender = true;
                 objects.PropLastUsed = t.ProperName();
             }
@@ -180,9 +195,9 @@ public class RenderSingleProp : Window
         ImGui.Spacing();
 
         int vars = variation;
-        if (cachedProp.Variants > 1)
+        if (prop.Variants > 1)
         {
-            ImGui.SliderInt("Variant", ref variation, 0, cachedProp.Variants - 1);
+            ImGui.SliderInt("Variant", ref variation, 0, prop.Variants - 1);
         }
 
         string bgName = background switch
@@ -213,8 +228,9 @@ public class RenderSingleProp : Window
         ImGui.Spacing();
         ImGui.Spacing();
 
-        int ly = layer;
-        ImGui.SliderInt("Sublayer", ref layer, 0, 29 - cachedProp.Depth);
+        int ly = (int)prop.Position.Z;
+        ImGui.SliderInt("Sublayer", ref ly, 0, 29 - prop.Depth);
+        prop.Position.Z = int.Clamp(ly, 0, 30 - prop.Depth);
 
         ImGui.Spacing();
         ImGui.Spacing();
@@ -228,17 +244,17 @@ public class RenderSingleProp : Window
         if (ImGui.Checkbox("Use Unlit Palette", ref objects.PropUseUnlit)) needsRerender = true;
         if (ImGui.Checkbox("Use Rain Palette", ref objects.PropUseRain)) needsRerender = true;
 
-        Vector2Int rSize = cachedProp.GetRenderSize(scene);
+        Vector2Int rSize = prop.GetRenderSize(scene);
         if (rSize.X != scene.Width || rSize.Y != scene.Height)
         {
             sceneSizeChanged = true;
             needsRerender = true;
         }
 
-        if (perRenderOffset != scene.ObjectOffset || perLightOffset != scene.LightOffset)
+        if (perRenderOffset != scene.ObjectOffset || perLightOffset != scene.LightAngle)
         {
             scene.ObjectOffset = perRenderOffset;
-            scene.LightOffset = perLightOffset;
+            scene.LightAngle = perLightOffset;
 
             needsRerender = true;
         }
@@ -259,7 +275,7 @@ public class RenderSingleProp : Window
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory($"{objects.PropsDir}/Rendered/");
-            scene.SaveToFile($"{objects.PropsDir}/Rendered/{cachedProp.Name}.png");
+            scene.SaveToFile($"{objects.PropsDir}/Rendered/{prop.Name}.png");
         }
 
         ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
@@ -274,7 +290,7 @@ public class RenderSingleProp : Window
     protected override void Destroy()
     {
         scene.Dispose();
-        cachedProp.Dispose();
+        prop.Dispose();
 
         palettes.PalettesChanged -= PalettesChanged;
         objects.PropsChanged -= PropsChanged;

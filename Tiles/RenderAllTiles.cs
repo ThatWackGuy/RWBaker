@@ -13,13 +13,15 @@ public class RenderAllTiles : Window
     private RWObjectManager objects => Program.ObjectManager;
     private PaletteManager palettes => Program.PaletteManager;
 
-    private RWScene scene;
+    private readonly Scene scene;
+
     private Vector2Int renderOffset;
     private Stopwatch renderTime;
 
     public RenderAllTiles() : base("Render Tiles", "render_tiles")
     {
-        scene = new RWScene();
+        scene = new Scene();
+
         renderOffset = Vector2Int.Zero;
         renderTime = new Stopwatch();
     }
@@ -51,13 +53,16 @@ public class RenderAllTiles : Window
             Directory.CreateDirectory(objects.GraphicsDir + "/Rendered/Bulk/");
 
             renderTime.Restart();
-            foreach (Tile tile in objects.Tiles)
+            foreach (TileInfo tile in objects.Tiles)
             {
                 if (!File.Exists(Path.Combine(objects.GraphicsDir, $"{tile.Name}.png"))) continue;
-                using CachedTile cache = new(objects, tile);
+                using TileObject cache = new(scene, objects, tile);
                 scene.Resize(cache);
                 scene.AddObject(cache);
-                scene.Render(objects.TileUseUnlit);
+                scene.Unlit = objects.TileUseUnlit;
+                scene.Rain = objects.TileUseRain;
+                scene.Render();
+                scene.RemoveObject(cache);
 
                 scene.SaveToFile($"{objects.GraphicsDir}/Rendered/Bulk/{tile.Name}.png");
             }
