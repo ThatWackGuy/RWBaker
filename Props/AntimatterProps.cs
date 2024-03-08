@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
 using RWBaker.Rendering;
 using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
@@ -13,6 +12,10 @@ namespace RWBaker.Props;
 
 public class AntimatterProp : IProp
 {
+    // TODO: Fix antimatter props
+    // use < -1 depth for "remove" depth?
+    // new texture for "remove" depth?
+
     // default fields
     private bool _hasWarnings;
     private string _warnings;
@@ -31,6 +34,7 @@ public class AntimatterProp : IProp
     // soft prop fields
     private readonly Vector2Int _size;
     private readonly int _depth;
+    private readonly float _contourExponent;
     private readonly int[] _repeatLayers;
 
     public AntimatterProp(RWObjectManager manager, PropType type, string line, string category, Vector3 categoryColor)
@@ -69,6 +73,14 @@ public class AntimatterProp : IProp
             _depth = 1;
         }
 
+        // CONTOUR EXP
+        string contourExpStr = Regex.Match(line, "#contourExp *: *([0-9]+\\.?(?:[0-9]+)?)*").Groups[1].Value;
+        if (!RWUtils.LingoFloat(contourExpStr, out _contourExponent))
+        {
+            LogWarning("Couldn't parse contour exponent (contourExp). Defaulting to 1.");
+            _contourExponent = 1;
+        }
+
         // TAGS
         string tagsRaw = Regex.Match(line, @"#tags *: *\[(.*?)\]").Groups[1].Value;
         string[] tagsList = Regex.Matches(tagsRaw, "\"(.*?)\"").Select(m => m.Groups[1].Value).ToArray();
@@ -104,21 +116,12 @@ public class AntimatterProp : IProp
     public bool HasWarnings() => _hasWarnings;
     public string Warnings() => _warnings;
 
-    public IProp.UniformConstructor GetUniform() => cached =>
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWBasicPropRenderUniform>();
-        GuiManager.GraphicsDevice.UpdateBuffer(
-            buffer,
-            0,
-            new RWBasicPropRenderUniform(
-                (Vector2)_size,
-                1,
-                cached.UseRainPalette
-            )
-        );
-
-        return buffer;
-    };
+    public IProp.UniformConstructor GetUniform() => cached => new RWAntimatterPropRenderUniform(
+        cached,
+        _contourExponent,
+        (Vector2)_size,
+        1
+    );
 
     public IProp.TexPosCalculator GetTexPos() => (_, _) => Vector2.UnitY;
     public ShaderSetDescription ShaderSetDescription() => RWUtils.AntimatterPropRendererShaderSet;

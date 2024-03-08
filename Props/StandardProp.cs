@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
 using RWBaker.Rendering;
 using RWBaker.RWObjects;
 using Veldrid;
@@ -162,23 +161,13 @@ public class StandardProp : IProp
     public bool HasWarnings() => _hasWarnings;
     public string Warnings() => _warnings;
 
-    public IProp.UniformConstructor GetUniform() => cached =>
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWStandardPropRenderUniform>();
-        GuiManager.GraphicsDevice.UpdateBuffer(
-            buffer,
-            0,
-            new RWStandardPropRenderUniform(
-                (Vector2)_size * 20,
-                _variations,
-                _bevelAmount,
-                (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/,
-                cached.UseRainPalette
-            )
-        );
-
-        return buffer;
-    };
+    public IProp.UniformConstructor GetUniform() => cached => new RWStandardPropRenderUniform(
+        cached,
+        (Vector2)_size * 20,
+        _variations,
+        _bevelAmount,
+        (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/
+    );
 
     public IProp.TexPosCalculator GetTexPos() => (var, layer) => new Vector2(_size.X * 20 * var,  1 + layer * _size.Y * 20);
 

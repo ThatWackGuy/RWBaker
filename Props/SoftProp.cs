@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
 using RWBaker.Rendering;
 using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
@@ -226,27 +225,17 @@ public class SoftProp : IProp
     public bool HasWarnings() => _hasWarnings;
     public string Warnings() => _warnings;
 
-    public IProp.UniformConstructor GetUniform() => cached =>
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWSoftPropRenderUniform>();
-        GuiManager.GraphicsDevice.UpdateBuffer(
-            buffer,
-            0,
-            new RWSoftPropRenderUniform(
-                (Vector2)_size,
-                _variations,
-                _colorize /*flag check to see if it is colored*/,
-                _smoothShading,
-                _contourExponent,
-                _highlightMin,
-                _shadowMin,
-                _highlightExponent,
-                cached.UseRainPalette
-            )
-        );
-
-        return buffer;
-    };
+    public IProp.UniformConstructor GetUniform() => cached => new RWSoftPropRenderUniform(
+        cached,
+        (Vector2)_size,
+        _variations,
+        _colorize /*flag check to see if it is colored*/,
+        _smoothShading,
+        _contourExponent,
+        _highlightMin,
+        _shadowMin,
+        _highlightExponent
+    );
 
     public IProp.TexPosCalculator GetTexPos() => (var, _) => new Vector2(_size.X * var,  1);
     public ShaderSetDescription ShaderSetDescription() => RWUtils.SoftPropRendererShaderSet;

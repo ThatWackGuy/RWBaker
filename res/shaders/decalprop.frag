@@ -3,24 +3,26 @@
 layout(set = 0, binding = 0, std140) uniform SceneInfo
 {
     mat4 transform;  // x+ right, y+ down matrix
-    float layer;
-    float layerCount;
     vec2 objectOffset;
 
     bool isShadow;
-    float shadowRepeatCurrent;
-    float shadowRepeatMax;
+    uint shadowRepeatCurrent;
+    uint shadowRepeatMax;
     vec2 lightOffset;
     vec2 shSize; // shadow texture size
 
-    vec2 texSize;
     vec2 effectColorsSize;
-    float effectA;
-    float effectB;
+    uint effectA;
+    uint effectB;
 } s;
 
 layout(set = 0, binding = 1, std140) uniform RenderData
 {
+    float startingZ;
+    float layerCount;
+    vec2 texSize;
+
+    mat4 rotate;
     vec2 pixelSize;
     uint vars;
     uint pRain;
@@ -40,7 +42,7 @@ layout(location = 0) out vec4 out_color;
 void main()
 {
     // Get pixel to be evaluated
-    vec4 cPix = texture(tex, f_texCoord / s.texSize);
+    vec4 cPix = texture(tex, f_texCoord / d.texSize);
 
     // white and transparent are skipped
     if (cPix.a == 0 || cPix == vec4(1))
@@ -65,7 +67,7 @@ void main()
 
     // Palette colors
     vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer + s.layer + .2;
+    float palX = f_layer + .2;
     vec4 pH = texture(pTex, vec2(palX, paletteOffset) / pSize); // Highlights
     vec4 pB = texture(pTex, vec2(palX, paletteOffset + 1) / pSize); // Base
     vec4 pS = texture(pTex, vec2(palX, paletteOffset + 2) / pSize); // Shadows
@@ -73,6 +75,6 @@ void main()
     float pFI = texture(pTex, vec2(9.2, paletteOffset - 2) / pSize).r; // Fog Intensity
     
     // decals are always colored
-    out_color = texture(tex, vec2(f_texCoord.x, f_texCoord.y + d.pixelSize.y) / s.texSize);
+    out_color = texture(tex, vec2(f_texCoord.x, f_texCoord.y + d.pixelSize.y) / d.texSize);
     out_color.a = .8;
 }

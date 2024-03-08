@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
@@ -15,6 +16,15 @@ namespace RWBaker;
 
 public static class Utils
 {
+    public static void ChangePriority<T>(this List<T> list, T obj, int move)
+    {
+        int index = list.IndexOf(obj);
+
+        T item = list[index];
+        list.RemoveAt(index);
+        list.Insert(int.Clamp(index + move, 0, list.Count), item);
+    }
+
     public static DeviceBuffer CreateStructBuffer<T>(this ResourceFactory factory) where T : unmanaged
     {
         return factory.CreateBuffer(
@@ -53,6 +63,11 @@ public static class Utils
         if (ImGui.MenuItem("Palette Picker"))
         {
             GuiManager.AddWindow(new PalettePicker());
+        }
+
+        if (ImGui.MenuItem("Scene Builder"))
+        {
+            GuiManager.AddWindow(new SceneBuilder());
         }
 
         if (ImGui.BeginMenu("Render"))
@@ -118,6 +133,12 @@ public static class Utils
             float textAlpha = ImGui.GetStyleColorVec4(id)->W;
             ImGui.PushStyleColor(id, new Vector4(col / 255, textAlpha));
         }
+    }
+
+    public static bool SelectableTreeNode(ReadOnlySpan<char> fmt)
+    {
+        ImGui.Bullet();
+        return ImGui.Selectable(fmt);
     }
 
     public static void InfoMarker(ReadOnlySpan<char> text)

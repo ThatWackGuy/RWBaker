@@ -57,7 +57,7 @@ public enum TileTag
     EffectColorB
 }
 
-public class Tile
+public class TileInfo
 {
     public bool HasWarnings;
     public string Warnings;
@@ -90,7 +90,7 @@ public class Tile
 
     public readonly TileTag[] Tags;
 
-    public Tile(RWObjectManager manager, string line, string category, Vector3 categoryColor)
+    public TileInfo(RWObjectManager manager, string line, string category, Vector3 categoryColor)
     {
         HasWarnings = false;
         Warnings = "";

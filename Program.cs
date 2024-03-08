@@ -17,7 +17,7 @@ public static class Program
         Configuration.Default.PreferContiguousImageBuffers = true;
 
         UserData userData;
-        Exception? contextFailed = null;
+        Exception? userdataFailed = null;
         // Create the userdata file if it doesn't exist
         if (!File.Exists("./userdata.json"))
         {
@@ -33,7 +33,7 @@ public static class Program
             }
             catch (Exception e)
             {
-                contextFailed = e;
+                userdataFailed = e;
                 userData = new UserData();
             }
         }
@@ -49,9 +49,9 @@ public static class Program
         ObjectManager.GetTiles(userData.SavedGraphicsDir);
         ObjectManager.GetProps(userData.SavedPropsDir);
 
-        if (contextFailed != null)
+        if (userdataFailed != null)
         {
-            GuiManager.Exception(contextFailed);
+            GuiManager.Exception(userdataFailed);
         }
 
         RWUtils.LoadGraphicsResources();

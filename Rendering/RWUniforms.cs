@@ -1,6 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using RWBaker.RWObjects;
+using RWBaker.Props;
 using RWBaker.Tiles;
 
 namespace RWBaker.Rendering;
@@ -9,8 +9,6 @@ namespace RWBaker.Rendering;
 public struct RWSceneInfo
 {
     public readonly Matrix4x4 Transform;
-    public readonly float Layer;
-    public readonly float LayerCount;
     public readonly Vector2 ObjectOffset;
 
     public bool RenderingShadows;
@@ -21,82 +19,99 @@ public struct RWSceneInfo
     public readonly Vector2 LightOffset;
     public readonly Vector2 ShadowTexSize;
 
-    public readonly Vector2 RenderableTexSize;
-
     public readonly Vector2 EffectColorsTexSize;
     public readonly float EffectA;
     public readonly float EffectB;
 
-    public RWSceneInfo(RWScene scene, IRWRenderable renderable)
+    public RWSceneInfo(Scene scene, int currentRepeat, bool renderingShadows)
     {
-        Transform = scene.Transform; // 64 bytes
-
-        Layer = renderable.Layer(); // 4
-        LayerCount = renderable.LayerCount(); // 4
+        Transform = scene.Projection; // 64 bytes
         ObjectOffset = scene.ObjectOffset; // 8
-        // 16 bytes total
+        // 72 bytes total
 
-        RenderingShadows = true; // 4
-        CurrentRepeat = 0; // 4
+        RenderingShadows = renderingShadows; // 4
+        CurrentRepeat = currentRepeat; // 4
         MaxRepeat = scene.ShadowRepeat; // 4
         // PADDING 4
         // 16 bytes total
 
-        LightOffset = scene.LightOffset; // 8
+        LightOffset = scene.LightAngle;
         ShadowTexSize = new Vector2(scene.Width, scene.Height); // 8
         // 16 bytes total
 
-        RenderableTexSize = renderable.GetTextureSize(); // 8
-        EffectColorsTexSize = scene.Palettes.EffectColors.Size; // 8
+        EffectColorsTexSize = scene.PaletteManager.EffectColors.Size; // 8
+        EffectA = scene.PaletteManager.EffectColorA; // 4
+        EffectB = scene.PaletteManager.EffectColorB; // 4
         // 16 bytes total
-
-        EffectA = scene.Palettes.EffectColorA; // 4
-        EffectB = scene.Palettes.EffectColorB; // 4
-        // 8 bytes total
     }
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWTileRenderUniform
 {
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 RenderableTexSize;
+
     public readonly Vector2 TileSize;
     public readonly int BufferTiles;
     public readonly int Vars;
     public readonly int UseRainPalette;
     public readonly int IsBox;
 
-    public RWTileRenderUniform(CachedTile cachedTile)
+    public RWTileRenderUniform(TileObject tile)
     {
-        TileSize = (Vector2)cachedTile.Size;
-        BufferTiles = cachedTile.BufferTiles;
-        Vars = cachedTile.Variants;
-        UseRainPalette = cachedTile.UseRainPalette ? 1 : 0;
-        IsBox = cachedTile.Type == TileType.Box ? 1 : 0;
+        StartingLayer = tile.Position.Z * 10; // 4
+        LayerCount = tile.LayerCount; // 4
+        RenderableTexSize = new Vector2(tile.CachedTexture.Width, tile.CachedTexture.Height); // 8
+        // 16 bytes
+
+        TileSize = (Vector2)tile.Size;
+        BufferTiles = tile.BufferTiles;
+        Vars = tile.Variants;
+        UseRainPalette = tile.Scene.Rain ? 1 : 0;
+        IsBox = tile.Type == TileType.Box ? 1 : 0;
     }
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWStandardPropRenderUniform
 {
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 TexSize;
+
+    public readonly Matrix4x4 Rotation;
     public readonly Vector2 PixelSize;
     public readonly int Vars;
     public readonly int Bevel;
     public readonly int Colored;
     public readonly int UseRainPalette;
 
-    public RWStandardPropRenderUniform(Vector2 size, int variants, int bevel, bool colored, bool rain)
+    public RWStandardPropRenderUniform(PropObject prop, Vector2 size, int variants, int bevel, bool colored)
     {
-        PixelSize = size;
-        Vars = variants;
-        Bevel = bevel;
-        Colored = colored ? 1 : 0;
-        UseRainPalette = rain ? 1 : 0;
+        StartingLayer = prop.Position.Z; // 4
+        LayerCount = prop.LayerCount; // 4
+        TexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
+        // 16 bytes
+
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2); // 64
+        PixelSize = size; // 8
+        Vars = variants; // 4
+        Bevel = bevel; // 4
+        Colored = colored ? 1 : 0; // 4
+        UseRainPalette = prop.Scene.Rain ? 1 : 0; // 4
     }
 }
 
 [StructLayout(LayoutKind.Sequential)]
 public struct RWSoftPropRenderUniform
 {
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 RenderableTexSize;
+
+    public readonly Matrix4x4 Rotation;
     public readonly Vector2 PixelSize;
     public readonly int Vars;
     public readonly int Colored;
@@ -107,8 +122,14 @@ public struct RWSoftPropRenderUniform
     public readonly float DepthHighlightExponent;
     public readonly int UseRainPalette;
 
-    public RWSoftPropRenderUniform(Vector2 size, int variants, bool colored, int smoothShading, float contourExponent, float highlightMin, float shadowMin, float depthHighlightExponent, bool rain)
+    public RWSoftPropRenderUniform(PropObject prop, Vector2 size, int variants, bool colored, int smoothShading, float contourExponent, float highlightMin, float shadowMin, float depthHighlightExponent)
     {
+        StartingLayer = prop.Position.Z; // 4
+        LayerCount = prop.LayerCount; // 4
+        RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
+        // 16 bytes
+
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
         PixelSize = size;
         Vars = variants;
         Colored = colored ? 1 : 0;
@@ -117,23 +138,58 @@ public struct RWSoftPropRenderUniform
         HighlightMin = highlightMin;
         ShadowMin = shadowMin;
         DepthHighlightExponent = depthHighlightExponent;
-        UseRainPalette = rain ? 1 : 0;
+        UseRainPalette = prop.Scene.Rain ? 1 : 0;
     }
 }
 
-
-// Used in decals and antimatter
 [StructLayout(LayoutKind.Sequential)]
-public struct RWBasicPropRenderUniform
+public struct RWAntimatterPropRenderUniform
 {
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 RenderableTexSize;
+
+    public readonly Matrix4x4 Rotation;
+    public readonly Vector2 PixelSize;
+    public readonly int Vars;
+    public readonly float ContourExponent;
+
+    public RWAntimatterPropRenderUniform(PropObject prop, float contourExponent,  Vector2 size, int variants)
+    {
+        StartingLayer = prop.Position.Z; // 4
+        LayerCount = prop.LayerCount; // 4
+        RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
+        // 16 bytes
+
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
+        PixelSize = size;
+        Vars = variants;
+        ContourExponent = contourExponent;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RWDecalPropRenderUniform
+{
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 RenderableTexSize;
+
+    public readonly Matrix4x4 Rotation;
     public readonly Vector2 PixelSize;
     public readonly int Vars;
     public readonly int UseRainPalette;
 
-    public RWBasicPropRenderUniform(Vector2 size, int variants, bool rain)
+    public RWDecalPropRenderUniform(PropObject prop, Vector2 size, int variants)
     {
+        StartingLayer = prop.Position.Z; // 4
+        LayerCount = prop.LayerCount; // 4
+        RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
+        // 16 bytes
+
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
         PixelSize = size;
         Vars = variants;
-        UseRainPalette = rain ? 1 : 0;
+        UseRainPalette = prop.Scene.Rain ? 1 : 0;
     }
 }
