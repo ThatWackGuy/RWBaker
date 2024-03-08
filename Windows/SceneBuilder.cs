@@ -16,7 +16,7 @@ public class SceneBuilder : Window
     private SceneObject? _inspectingObject;
 
     private bool needsResize = true;
-    private bool viewShadows = false;
+    private bool viewShadows;
     private Vector2 currentCanvasSize = Vector2.One;
     private readonly Vector4 rectOutlineCol;
 
@@ -50,11 +50,9 @@ public class SceneBuilder : Window
     {
         Begin();
 
+        Vector2 padding = ImGui.GetStyle().WindowPadding;
         _sceneSize.X = ImGui.GetWindowSize().X * 2f / 3f;
         float availY = ImGui.GetContentRegionAvail().Y;
-
-        GuiTexture texture = viewShadows ? _scene.ShadowRender : _scene.ObjectRender;
-        ImGui.Image(texture.Index, texture.Size, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
 
         if (currentCanvasSize.X < _sceneSize.X || currentCanvasSize.X > _sceneSize.X || currentCanvasSize.Y < availY || currentCanvasSize.Y > availY)
         {
@@ -62,12 +60,33 @@ public class SceneBuilder : Window
             needsResize = true;
         }
 
+        Vector2 viewMenuPos = ImGui.GetCursorPos();
+        viewMenuPos.X += _sceneSize.X - 32 - padding.X;
+        viewMenuPos.Y += padding.X;
+
+        GuiTexture texture = viewShadows ? _scene.ShadowRender : _scene.ObjectRender;
+        ImGui.Image(texture.Index, texture.Size, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+
         ImGui.SameLine();
+        Vector2 oldPos = ImGui.GetCursorPos();
+        ImGui.SetCursorPos(viewMenuPos);
+
+        // Draw view switcher
+        texture = viewShadows ?  _scene.ObjectRender : _scene.ShadowRender;
+        ImGui.Image(texture.Index, Vector2.One * 32, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        if (ImGui.IsItemClicked()) viewShadows = !viewShadows;
+        if (ImGui.IsItemHovered() && ImGui.BeginItemTooltip())
+        {
+            ImGui.Text("Click to switch between shadows and render");
+            ImGui.EndTooltip();
+        }
+
+        ImGui.SetCursorPos(oldPos);
 
         availY = ImGui.GetContentRegionAvail().Y / 2;
-        Vector2 finalChildPos = ImGui.GetCursorScreenPos();
-        finalChildPos.Y += availY + ImGui.GetStyle().WindowPadding.Y;
-        if (ImGui.BeginChild("Scene items", Vector2.UnitY * availY, ImGuiChildFlags.Border))
+        Vector2 finalChildPos = ImGui.GetCursorPos();
+        finalChildPos.Y += availY + padding.Y;
+        if (ImGui.BeginChild("Scene Items", Vector2.UnitY * availY, ImGuiChildFlags.Border))
         {
             ImGui.SeparatorText("HIERARCHY");
 
@@ -82,7 +101,7 @@ public class SceneBuilder : Window
             ImGui.EndChild();
         }
 
-        ImGui.SetCursorScreenPos(finalChildPos);
+        ImGui.SetCursorPos(finalChildPos);
         if (ImGui.BeginChild("Object Inspector", Vector2.Zero, ImGuiChildFlags.Border))
         {
             if (_inspecting != null)

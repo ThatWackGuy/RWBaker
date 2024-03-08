@@ -36,6 +36,7 @@ layout(location = 2) in vec4 v_color;
 layout(location = 0) out vec2 f_texCoord;
 layout(location = 1) out flat int f_layer;
 layout(location = 2) out float f_shLayer;
+layout(location = 3) out flat int f_localZ;
 
 void main()
 {
@@ -48,4 +49,5 @@ void main()
     f_texCoord = v_texCoord;
     f_layer = int(rotatedPos.z);
     f_shLayer = (s.transform * vec4(0, 0, rotatedPos.z - 0.8, 1)).z;
+    f_localZ = int(localZ);
 }

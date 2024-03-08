@@ -23,7 +23,6 @@ public class RenderSingleProp : Window
     private IEnumerable<IProp>? searchedProps;
     private int variation;
     private int background;
-    private int layer;
     private bool needsRerender;
     private bool sceneSizeChanged;
     private long renderTime;
@@ -229,6 +228,7 @@ public class RenderSingleProp : Window
         ImGui.Spacing();
 
         int ly = (int)prop.Position.Z;
+        int lyCheck = ly;
         ImGui.SliderInt("Sublayer", ref ly, 0, 29 - prop.Depth);
         prop.Position.Z = int.Clamp(ly, 0, 30 - prop.Depth);
 
@@ -259,7 +259,7 @@ public class RenderSingleProp : Window
             needsRerender = true;
         }
 
-        if (bg != background || vars != variation || ly != layer || sr != shadowRepeat) needsRerender = true;
+        if (bg != background || vars != variation || ly != lyCheck || sr != shadowRepeat) needsRerender = true;
 
         ImGui.SeparatorText("RENDER");
 

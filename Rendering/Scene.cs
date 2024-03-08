@@ -161,7 +161,7 @@ public class Scene : IInspectable, IDisposable
         {
             ImGui.InputTextWithHint("Search", "Type Words To Search", ref ObjectManager.TileLastSearched, 280);
 
-            if (ImGui.BeginCombo("##tile_picker", "tile"))
+            if (ImGui.BeginCombo("##tile_picker", "Select Tile to Add"))
             {
                 foreach (TileInfo t in ObjectManager.Tiles.Where(t => t.SearchName.Contains(ObjectManager.TileLastSearched, StringComparison.CurrentCultureIgnoreCase)))
                 {
@@ -191,7 +191,7 @@ public class Scene : IInspectable, IDisposable
         if (ImGui.BeginPopup("addProp"))
         {
             ImGui.InputTextWithHint("Search", "Type Words To Search", ref ObjectManager.PropLastSearched, 280);
-            if (ImGui.BeginCombo("##prop_picker", "prop"))
+            if (ImGui.BeginCombo("##prop_picker", "Select Prop To Add"))
             {
                 foreach (IProp p in ObjectManager.Props.Where(t => t.SearchName().Contains(ObjectManager.PropLastSearched, StringComparison.CurrentCultureIgnoreCase)))
                 {
@@ -220,7 +220,7 @@ public class Scene : IInspectable, IDisposable
 
         ImGui.SliderInt("Shadow Smoothness", ref ShadowRepeat, 0, 50);
 
-        if (ImGui.BeginCombo("Background", RenderBg.ToString()))
+        if (ImGui.BeginCombo("##background", "Choose background"))
         {
             if (ImGui.Selectable("Clear"))
             {
@@ -361,12 +361,12 @@ public class Scene : IInspectable, IDisposable
             }
 
             // Resize uniform buffer if desc is bigger
-            if (desc.ObjectDataBuffer.SizeInBytes > ActiveObjectUniform.SizeInBytes)
+            if (desc.ObjectSizeInBytes > ActiveObjectUniform.SizeInBytes)
             {
                 ActiveObjectUniform.Dispose();
                 ActiveObjectUniform = graphicsDevice.ResourceFactory.CreateBuffer(
                     new BufferDescription(
-                        desc.ObjectDataBuffer.SizeInBytes,
+                        desc.ObjectSizeForBuffer,
                         BufferUsage.UniformBuffer
                     )
                 );
@@ -382,7 +382,7 @@ public class Scene : IInspectable, IDisposable
                 );
             }
 
-            commandList.CopyBuffer(desc.ObjectDataBuffer, 0, ActiveObjectUniform, 0, desc.ObjectDataBuffer.SizeInBytes);
+            commandList.UpdateBuffer(ActiveObjectUniform, 0, desc.ObjectData, (uint)desc.ObjectSizeInBytes);
             RenderShadows(desc);
         }
 
@@ -393,8 +393,9 @@ public class Scene : IInspectable, IDisposable
         commandList.ClearDepthStencil(1, 0);
         foreach (RenderDescription desc in activeRenderData)
         {
-            commandList.CopyBuffer(desc.ObjectDataBuffer, 0, ActiveObjectUniform, 0, desc.ObjectDataBuffer.SizeInBytes);
+            commandList.UpdateBuffer(ActiveObjectUniform, 0, desc.ObjectData, (uint)desc.ObjectSizeInBytes);
             RenderObject(desc);
+            desc.Dispose();
         }
 
         commandList.End();

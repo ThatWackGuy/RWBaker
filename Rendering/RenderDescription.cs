@@ -1,5 +1,5 @@
 using System;
-using System.Numerics;
+using System.Runtime.InteropServices;
 using RWBaker.RWObjects;
 using Veldrid;
 
@@ -13,7 +13,9 @@ public struct RenderDescription : IDisposable
     public readonly ResourceSet? TextureSet;
     public readonly bool HasTextureSet;
 
-    public readonly DeviceBuffer ObjectDataBuffer;
+    public readonly int ObjectSizeInBytes;
+    public readonly uint ObjectSizeForBuffer;
+    public readonly IntPtr ObjectData;
 
     public readonly Pipeline Pipeline;
 
@@ -25,15 +27,20 @@ public struct RenderDescription : IDisposable
         HasTextureSet = renderable.GetTextureSet(scene, out ResourceSet? textureSet);
         TextureSet = textureSet;
 
-        ObjectDataBuffer = renderable.CreateObjectData();
+        object data = renderable.CreateObjectData();
+        ObjectSizeInBytes = Marshal.SizeOf(data);
+        ObjectSizeForBuffer = 16 * (uint)float.Ceiling(ObjectSizeInBytes / 16f);
+
+        ObjectData = Marshal.AllocHGlobal(ObjectSizeInBytes);
+        Marshal.StructureToPtr(data, ObjectData, false);
 
         Pipeline = renderable.GetPipeline();
     }
 
     public void Dispose()
     {
-        Pipeline.Dispose();
-        ObjectDataBuffer.Dispose();
+        // Pipeline belongs to the renderable, it must dispose the pipeline itself!
+        Marshal.FreeHGlobal(ObjectData);
         if (HasTextureSet) TextureSet!.Dispose();
     }
 }

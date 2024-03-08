@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
 using RWBaker.Rendering;
 using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
@@ -106,7 +105,7 @@ public class DecalProp : IProp
         string variationsStr = Regex.Match(line, "#vars *: *([0-9]*)").Groups[1].Value;
         if (!RWUtils.LingoInt(variationsStr, out _variations))
         {
-            if (type == PropType.VariedSoft)
+            if (type == PropType.VariedDecal)
             {
                 LogWarning("Prop was VariedSoft but variation couldn't be parsed. Defaulting to 1.");
             }
@@ -125,7 +124,7 @@ public class DecalProp : IProp
         string randomStr = Regex.Match(line, "#random *: *([0-1]){1}").Groups[1].Value;
         if (!RWUtils.LingoBool(randomStr, out _random))
         {
-            if (type == PropType.VariedSoft)
+            if (type == PropType.VariedDecal)
             {
                 LogWarning("Prop was VariedSoft but random couldn't be parsed. Defaulting to false.");
             }
@@ -168,21 +167,11 @@ public class DecalProp : IProp
     public bool HasWarnings() => _hasWarnings;
     public string Warnings() => _warnings;
 
-    public IProp.UniformConstructor GetUniform() => cached =>
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWBasicPropRenderUniform>();
-        GuiManager.GraphicsDevice.UpdateBuffer(
-            buffer,
-            0,
-            new RWBasicPropRenderUniform(
-                cached,
-                (Vector2)_size,
-                _variations
-            )
-        );
-
-        return buffer;
-    };
+    public IProp.UniformConstructor GetUniform() => cached => new RWDecalPropRenderUniform(
+        cached,
+        (Vector2)_size,
+        _variations
+    );
 
     public IProp.TexPosCalculator GetTexPos() => (var, _) => new Vector2(_size.X * var,  1);
     public ShaderSetDescription ShaderSetDescription() => RWUtils.DecalPropRendererShaderSet;

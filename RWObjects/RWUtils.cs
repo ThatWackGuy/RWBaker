@@ -7,6 +7,8 @@ namespace RWBaker.RWObjects;
 
 public static class RWUtils
 {
+    #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
     public static VertexLayoutDescription[] RWVertexLayout;
     public static ResourceLayout[] RWResourceLayout;
 
@@ -19,6 +21,8 @@ public static class RWUtils
     public static ShaderSetDescription SoftPropRendererShaderSet;
     public static ShaderSetDescription DecalPropRendererShaderSet;
     public static ShaderSetDescription AntimatterPropRendererShaderSet;
+
+    #pragma warning restore CS8618
 
     public static void LoadGraphicsResources()
     {

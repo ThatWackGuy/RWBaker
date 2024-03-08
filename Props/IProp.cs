@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker.Props;
@@ -33,7 +32,7 @@ public enum PropTag
 
 public interface IProp
 {
-    public delegate DeviceBuffer UniformConstructor(PropObject propObject);
+    public delegate object UniformConstructor(PropObject propObject);
     public delegate Vector2 TexPosCalculator(int variation, int layer);
 
     public Vector3 CategoryColor();

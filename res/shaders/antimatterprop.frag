@@ -37,6 +37,7 @@ layout(set = 1, binding = 3) uniform sampler2D sTex; // shadow depth map
 layout(location = 0) in vec2 f_texCoord;
 layout(location = 1) flat in int f_layer;
 layout(location = 2) in float f_shLayer;
+layout(location = 3) in flat int f_localZ;
 
 layout(location = 0) out vec4 out_color;
 
@@ -51,7 +52,9 @@ void main()
         discard;
     }
 
-    float renderTo = round(clamp(d.layerCount + d.layerCount * (1.0 - cPix.r), 0, 29));
+    float dpthRemove = pow(cPix.g, d.contourExponent) * d.layerCount;
+
+    float renderTo = round(clamp(dpthRemove, 0, 31));
 
     if (f_layer > renderTo)
     {

@@ -95,7 +95,7 @@ public struct RWStandardPropRenderUniform
         TexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
         // 16 bytes
 
-        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation/* * (float.Pi / 180)*/, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2); // 64
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2); // 64
         PixelSize = size; // 8
         Vars = variants; // 4
         Bevel = bevel; // 4
@@ -129,7 +129,7 @@ public struct RWSoftPropRenderUniform
         RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
         // 16 bytes
 
-        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation/* * (float.Pi / 180)*/, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
         PixelSize = size;
         Vars = variants;
         Colored = colored ? 1 : 0;
@@ -142,9 +142,34 @@ public struct RWSoftPropRenderUniform
     }
 }
 
-// Used in decals and antimatter
 [StructLayout(LayoutKind.Sequential)]
-public struct RWBasicPropRenderUniform
+public struct RWAntimatterPropRenderUniform
+{
+    public readonly float StartingLayer;
+    public readonly float LayerCount;
+    public readonly Vector2 RenderableTexSize;
+
+    public readonly Matrix4x4 Rotation;
+    public readonly Vector2 PixelSize;
+    public readonly int Vars;
+    public readonly float ContourExponent;
+
+    public RWAntimatterPropRenderUniform(PropObject prop, float contourExponent,  Vector2 size, int variants)
+    {
+        StartingLayer = prop.Position.Z; // 4
+        LayerCount = prop.LayerCount; // 4
+        RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
+        // 16 bytes
+
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
+        PixelSize = size;
+        Vars = variants;
+        ContourExponent = contourExponent;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RWDecalPropRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
@@ -155,14 +180,14 @@ public struct RWBasicPropRenderUniform
     public readonly int Vars;
     public readonly int UseRainPalette;
 
-    public RWBasicPropRenderUniform(PropObject prop, Vector2 size, int variants)
+    public RWDecalPropRenderUniform(PropObject prop, Vector2 size, int variants)
     {
         StartingLayer = prop.Position.Z; // 4
         LayerCount = prop.LayerCount; // 4
         RenderableTexSize = new Vector2(prop.CachedTexture.Width, prop.CachedTexture.Height); // 8
         // 16 bytes
 
-        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation/* * (float.Pi / 180)*/, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
+        Rotation = Matrix4x4.CreateRotationZ(prop.Rotation, prop.Position + new Vector3((Vector2)prop.PixelSize, 1)/ 2);
         PixelSize = size;
         Vars = variants;
         UseRainPalette = prop.Scene.Rain ? 1 : 0;

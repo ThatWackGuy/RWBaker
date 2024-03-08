@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
 using RWBaker.Rendering;
 using Veldrid;
 
@@ -12,7 +11,7 @@ public interface IRenderable
 {
     public RenderDescription GetRenderDescription(Scene scene);
 
-    public DeviceBuffer CreateObjectData();
+    public object CreateObjectData();
 
     public Vector2Int GetRenderSize(Scene scene);
 

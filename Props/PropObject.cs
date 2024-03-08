@@ -36,7 +36,10 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public readonly Texture CachedTexture;
 
-    public PropObject() : base(null, "")
+    /// <summary>Creates an empty prop object</summary>
+    /// <remarks>Only use for lack of prop data!</remarks>
+    /// <exception cref="Exception">throws if used for rendering</exception>
+    public PropObject() : base(null!, "")
     {
         Name = "";
         ProperName = "";
@@ -76,7 +79,7 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
         _pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
                 BlendStateDescription.SingleAlphaBlend,
-                new DepthStencilStateDescription(true, true, ComparisonKind.Less),
+                new DepthStencilStateDescription(true, true, ComparisonKind.LessEqual),
                 new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, false, false),
                 PrimitiveTopology.TriangleList,
                 cache.ShaderSetDescription(),
@@ -197,7 +200,7 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
         return new RenderDescription(vertices, indices, this, scene);
     }
 
-    public DeviceBuffer CreateObjectData() => _uniformConstructor(this);
+    public object CreateObjectData() => _uniformConstructor(this);
 
     public Vector2Int GetRenderSize(Scene scene) => PixelSize + (LayerCount - 1) * Vector2.Abs(scene.ObjectOffset);
 
@@ -221,6 +224,7 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
     public void Dispose()
     {
         CachedTexture.Dispose();
+        _pipeline.Dispose();
         GC.SuppressFinalize(this);
     }
 }

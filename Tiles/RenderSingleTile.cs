@@ -108,7 +108,7 @@ public class RenderSingleTiles : Window
         Stopwatch time = Stopwatch.StartNew();
 
         tile.RenderVariation = variation;
-        tile.Position.Z = float.Clamp(tile.Position.Z, 0, tile.HasSpecs2 ? 1 : 2);;
+        tile.Position.Z = float.Clamp(tile.Position.Z, 0, tile.HasSpecs2 ? 1 : 2);
 
         if (sceneSizeChanged)
         {

@@ -78,8 +78,8 @@ void main()
     float dpth = depth(f_texCoord);
     float dpthRemove = pow(1 - dpth, d.contourExponent) * d.layerCount;
 
-    float renderFrom = round(clamp(dpthRemove, 0, 30));
-    float renderTo = round(clamp(mix(d.layerCount, dpthRemove, cPix.r), 0, 30));
+    float renderFrom = round(clamp(dpthRemove, 0, 31));
+    float renderTo = round(clamp(mix(d.layerCount, dpthRemove, cPix.r), 0, 31));
 
     if (f_localZ < renderFrom || f_localZ > renderTo)
     {

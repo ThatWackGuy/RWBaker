@@ -33,7 +33,7 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public readonly bool HasSpecs2;
 
-    public readonly Pipeline Pipeline;
+    private readonly Pipeline _pipeline;
     public readonly Texture CachedTexture;
 
     // Default when there are no tiles
@@ -55,7 +55,7 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
         HasSpecs2 = false;
 
-        Pipeline = null!;
+        _pipeline = null!;
 
         CachedTexture = GuiManager.MissingTex.Texture;
     }
@@ -74,11 +74,13 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
         RenderRepeatLayers = cache.RepeatLayers;
 
+        // Limit layers to 30
         if (cache.RepeatLayers.Length > 30)
         {
             RenderRepeatLayers = cache.RepeatLayers[..30];
         }
 
+        // Decreases total layer count to 30 "intelligently" if it exceeds 30
         if (RenderRepeatLayers.Sum() >= 30)
         {
             int check = 0;
@@ -110,7 +112,7 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
         HasSpecs2 = cache.HasSpecs2;
 
-        Pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
+        _pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
                 BlendStateDescription.SingleAlphaBlend,
                 new DepthStencilStateDescription(true, true, ComparisonKind.Less),
@@ -130,8 +132,8 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         int x = (int)Position.X;
         int y = (int)Position.Y;
         int z = (int)Position.Z;
-        ImGui.SliderInt("X", ref x, 0, (int)Scene.Width);
-        ImGui.SliderInt("Y", ref y, 0, (int)Scene.Height);
+        ImGui.SliderInt("X", ref x, 0, (int)float.Floor(Scene.Width / 20f));
+        ImGui.SliderInt("Y", ref y, 0, (int)float.Floor(Scene.Height / 20f));
         ImGui.SliderInt("Layer", ref z, 0, 2);
 
         Position.X = x;
@@ -152,7 +154,7 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
             if (RenderRepeatLayers[imgLayer] == 0) continue;
 
             // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer
-            Vector3 pos = Position with { Z = Position.Z * 10 };
+            Vector3 pos = new(Position.X * 20, Position.Y * 20, Position.Z * 10);
             Vector2 texPos = Type == TileType.Box ? Vector2.Zero : new Vector2(PixelSize.X * RenderVariation,  1 + imgLayer * PixelSize.Y);
             Vector2 texSize = (Vector2)PixelSize;
 
@@ -202,16 +204,9 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         return new RenderDescription(vertices, indices, this, scene);
     }
 
-    public DeviceBuffer CreateObjectData()
-    {
-        DeviceBuffer buffer = GuiManager.ResourceFactory.CreateStructBuffer<RWTileRenderUniform>();
+    public object CreateObjectData() => new RWTileRenderUniform(this);
 
-        GuiManager.GraphicsDevice.UpdateBuffer(buffer, 0, new RWTileRenderUniform(this));
-
-        return buffer;
-    }
-
-    public Pipeline GetPipeline() => Pipeline;
+    public Pipeline GetPipeline() => _pipeline;
 
     public Vector2Int GetRenderSize(Scene scene) => PixelSize + (LayerCount - 1) * Vector2.Abs(scene.ObjectOffset);
 
@@ -233,6 +228,7 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
     public void Dispose()
     {
         CachedTexture.Dispose();
+        _pipeline.Dispose();
         GC.SuppressFinalize(this);
     }
 }
