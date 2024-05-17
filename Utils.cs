@@ -16,6 +16,13 @@ namespace RWBaker;
 
 public static class Utils
 {
+    // common colors in uint
+    public const uint IM_RED = 4278190335;
+    public const uint IM_GREEN = 4278255360;
+    public const uint IM_BLUE = 4294901760;
+    public const uint IM_WHITE = 4294967295;
+    public const uint IM_GRAY = 4286611584;
+
     public static void ChangePriority<T>(this List<T> list, T obj, int move)
     {
         int index = list.IndexOf(obj);
@@ -33,6 +40,22 @@ public static class Utils
                 BufferUsage.UniformBuffer
             )
         );
+    }
+
+    public static Matrix4x4 CreatePerspectiveOffsetProjection(float width, float height, float near, float far, float xOffset, float yOffset, float staticLayerDistance)
+    {
+        float perW = width / 2;
+        float perH = height / 2;
+
+        Matrix4x4 defMatrix = Matrix4x4.CreatePerspectiveOffCenter(perW, -perW, -perH, perH, near, far);
+
+        defMatrix.M31 = xOffset / -(2 * perW);
+        defMatrix.M32 = -yOffset / (2 * perH);
+
+        defMatrix.M41 = staticLayerDistance * defMatrix.M31;
+        defMatrix.M42 = staticLayerDistance * defMatrix.M32;
+
+        return defMatrix;
     }
 
     public static byte[] GetEmbeddedBytes(string path)
@@ -74,21 +97,16 @@ public static class Utils
         {
             ImGui.SeparatorText("TILES");
 
-            if (ImGui.MenuItem("Render Single Tile"))
+            if (ImGui.MenuItem("Render Tiles"))
             {
                 GuiManager.AddWindow(new RenderSingleTiles());
-            }
-
-            if (ImGui.MenuItem("Render All Tiles"))
-            {
-                GuiManager.AddWindow(new RenderAllTiles());
             }
 
             ImGui.SeparatorText("PROPS");
 
             if (ImGui.MenuItem("Render Single Prop"))
             {
-                GuiManager.AddWindow(new RenderSingleProp());
+                GuiManager.AddWindow(new RenderProps());
             }
 
             ImGui.EndMenu();

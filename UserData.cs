@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using RWBaker.Gui;
 using RWBaker.Palettes;
-using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker;
@@ -46,14 +45,14 @@ public class UserData
     public string TileLastSearched;
     public string TileLastUsed;
     public bool TileUseUnlit;
-    public bool TileUseRain;
+    public float TileUseRain;
 
     // Last prop info
     public string SavedPropsDir;
     public string PropLastSearched;
     public string PropLastUsed;
     public bool PropUseUnlit;
-    public bool PropUseRain;
+    public float PropUseRain;
 
     /// <summary>
     /// Loads the default options
@@ -80,13 +79,13 @@ public class UserData
         TileLastSearched = "";
         TileLastUsed = "";
         TileUseUnlit = false;
-        TileUseRain = false;
+        TileUseRain = 0;
 
         SavedPropsDir = "";
         PropLastSearched = "";
         PropLastUsed = "";
         PropUseUnlit = false;
-        PropUseRain = false;
+        PropUseRain = 0;
     }
 
     /// <summary>
@@ -112,8 +111,8 @@ public class UserData
         SavedGraphicsDir = objects.GraphicsDir;
         TileLastSearched = objects.TileLastSearched;
         TileLastUsed = objects.TileLastUsed;
-        TileUseUnlit = objects.TileUseRain;
-        TileUseRain = objects.PropUseRain;
+        TileUseUnlit = objects.TileUseUnlit;
+        TileUseRain = objects.TileUseRain;
 
         SavedPropsDir = objects.PropsDir;
         PropLastSearched = objects.PropLastSearched;

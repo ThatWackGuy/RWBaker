@@ -1,37 +1,46 @@
 #version 450
 
-layout(set = 0, binding = 0, std140) uniform SceneInfo
+layout(set = 0, binding = 0, std140) uniform CameraData
 {
-    mat4 transform;  // x+ right, y+ down matrix
-    vec2 objectOffset;
+    mat4 transform;
+} camera;
 
-    bool isShadow;
-    float shadowRepeatCurrent;
-    float shadowRepeatMax;
-    vec2 lightOffset;
-    vec2 shSize; // shadow texture size
+layout(set = 0, binding = 1, std140) uniform PassData
+{
+    uint idx;
+    vec2 size;
+} pass;
 
+layout(set = 0, binding = 2, std140) uniform LightData
+{
+    mat4 lightTransform;
+    mat4 biasTransform;
+    float shadowBias;
+    float pRain;
+} lighting;
+
+layout(set = 0, binding = 3, std140) uniform PaletteData
+{
     vec2 effectColorsSize;
     uint effectA;
     uint effectB;
-} s;
+} palette;
 
-layout(set = 0, binding = 1, std140) uniform RenderData
+layout(set = 0, binding = 4, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;
     vec2 texSize;
 
-    mat4 rotate;
     vec2 pixelSize;
     uint vars;
     uint color;
+    uint round;
     uint shadeRepeat;
     float contourExponent;
     float highlightMin;
     float shadowMin;
     float highlightExponent;
-    uint pRain;
 } d;
 
 layout(location = 0) in vec3 v_position;
@@ -39,29 +48,25 @@ layout(location = 1) in vec2 v_texCoord;
 layout(location = 2) in vec4 v_color;
 
 layout(location = 0) out vec2 f_texCoord;
-layout(location = 1) out flat int f_layer;
-layout(location = 2) out float f_shLayer;
+layout(location = 1) out vec4 f_shCoord;
+layout(location = 2) out flat int f_layer;
 layout(location = 3) out float f_localZ;
 
 void main()
 {
-    vec4 rotatedPos = d.rotate * vec4(v_position.xyz, 1);
-    f_localZ = rotatedPos.z - d.startingZ;
+    vec4 pos4 = vec4(v_position, 1);
 
-    if (s.isShadow)
+    if (pass.idx == 0)
     {
-        float depthOffset = s.shadowRepeatCurrent / s.shadowRepeatMax;
-        // max(-s.objectOffset, 0) * (d.layerCount - 1) + s.objectOffset * localZ
-        vec2 layerOffset = max(s.objectOffset, 0) * (d.layerCount - 1) + -s.objectOffset * (d.layerCount - 1 - f_localZ - depthOffset);
-        vec2 offset = s.lightOffset * (d.layerCount - 1) + -s.lightOffset * (d.layerCount - 1 - f_localZ - depthOffset);
-        gl_Position = s.transform * vec4(rotatedPos.xy + offset + layerOffset, rotatedPos.z + depthOffset, 1);
+        gl_Position = lighting.lightTransform * pos4;
     }
     else
     {
-        gl_Position = s.transform * vec4(rotatedPos.xy + max(-s.objectOffset, 0) * (d.layerCount - 1) + s.objectOffset * f_localZ, rotatedPos.z, 1);
+        gl_Position = camera.transform * pos4;
     }
 
     f_texCoord = v_texCoord;
-    f_layer = int(rotatedPos.z);
-    f_shLayer = (s.transform * vec4(0, 0, rotatedPos.z - 0.8, 1)).z;
+    f_layer = int(v_position.z);
+    f_shCoord = lighting.biasTransform * lighting.lightTransform * pos4;
+    f_localZ = v_position.z - d.startingZ;
 }

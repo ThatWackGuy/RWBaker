@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using RWBaker.Gui;
+using RWBaker.Rendering;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using Veldrid;
 
 namespace RWBaker.Palettes;
 
@@ -82,6 +84,8 @@ public class PaletteManager : IDisposable
         }
     }
 
+    public readonly DeviceBuffer PaletteInfo;
+
     public delegate void PalettesChangedEvent();
     public event PalettesChangedEvent PalettesChanged = () => { };
 
@@ -105,6 +109,9 @@ public class PaletteManager : IDisposable
 
         _lastA = userData.UsingPalette1;
         _lastB = userData.UsingPalette2;
+
+        PaletteInfo = GuiManager.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
+        PalettesChanged += () => GuiManager.GraphicsDevice.UpdateBuffer(PaletteInfo, 0, new PaletteUniform(this));
     }
 
     public void GetPalettes(string path)

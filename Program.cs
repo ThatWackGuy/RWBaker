@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using RWBaker.Gui;
 using RWBaker.Palettes;
-using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
 
 namespace RWBaker;
@@ -18,14 +17,7 @@ public static class Program
 
         UserData userData;
         Exception? userdataFailed = null;
-        // Create the userdata file if it doesn't exist
-        if (!File.Exists("./userdata.json"))
-        {
-            File.Create("./userdata.json").Close();
-
-            userData = new UserData();
-        }
-        else
+        if (File.Exists("./userdata.json"))
         {
             try
             {
@@ -36,6 +28,13 @@ public static class Program
                 userdataFailed = e;
                 userData = new UserData();
             }
+        }
+        // Create the userdata file if it doesn't exist
+        else
+        {
+            File.Create("./userdata.json").Close();
+
+            userData = new UserData();
         }
 
         userData.Save("./userdata.json");

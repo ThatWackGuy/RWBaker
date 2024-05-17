@@ -3,26 +3,15 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using RWBaker.Gui;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
 using Veldrid;
 
 namespace RWBaker.Props;
 
-public class DecalProp : IProp
+public class DecalProp : Prop
 {
-    // default fields
-    private bool _hasWarnings;
-    private string _warnings;
-
-    private readonly string _category;
-    private readonly Vector3 _categoryColor;
-
-    private readonly string _name;
-    private readonly string _properName;
-    private readonly string _searchName;
-
     private readonly PropTag _tags;
 
     private readonly int _variations;
@@ -31,22 +20,19 @@ public class DecalProp : IProp
     private readonly string[] _notes;
 
     // soft prop fields
-    private readonly Vector2Int _size;
+    private readonly Vector2 _size;
     private readonly int _depth;
     private readonly int[] _repeatLayers;
 
     public DecalProp(RWObjectManager manager, PropType type, string line, string category, Vector3 categoryColor)
     {
-        _hasWarnings = false;
-        _warnings = "";
+        Category = category;
+        CategoryColor = categoryColor;
 
-        _category = category;
-        _categoryColor = categoryColor;
+        Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
+        ProperName = $"{Category} - {Name}";
 
-        _name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
-        _properName = $"{_category} - {_name}";
-
-        string filePath = Path.Combine(manager.PropsDir, $"{_name}.png");
+        string filePath = Path.Combine(manager.PropsDir, $"{Name}.png");
         bool fileExists = true;
         if (!File.Exists(filePath))
         {
@@ -54,7 +40,7 @@ public class DecalProp : IProp
             LogWarning("The image for the prop couldn't be found. Please check the names or if the file has been deleted.");
         }
 
-        _size = Vector2Int.One;
+        _size = Vector2.One;
         switch (type)
         {
             // unvaried soft props have implicit sizes
@@ -71,17 +57,20 @@ public class DecalProp : IProp
 
             case PropType.VariedDecal:
             {
+                Vector2Int intv2;
                 Match sizeStr = Regex.Match(line, @"#pxlSize *: *point\( *([0-9]+) *, *([0-9]+) *\)");
-                if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out _size.X))
+                if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out intv2.X))
                 {
                     _size.X = 1;
                     LogWarning("Couldn't parse Size X component");
                 }
-                if (!RWUtils.LingoInt(sizeStr.Groups[2].Value, out _size.Y))
+                if (!RWUtils.LingoInt(sizeStr.Groups[2].Value, out intv2.Y))
                 {
                     _size.Y = 1;
                     LogWarning("Couldn't parse Size Y component");
                 }
+
+                _size = (Vector2)intv2;
 
                 break;
             }
@@ -146,45 +135,49 @@ public class DecalProp : IProp
             _tags |= tag;
         }
 
-        _searchName = $"{_category} {_name} {type} {string.Join(' ', _tags)} {_size.X}x{_size.Y}".ToLower();
+        SearchName = $"{Category} {Name} {type} {string.Join(' ', _tags)} {_size.X}x{_size.Y}".ToLower();
 
-        // soft props only repeat once
+        // decal props only repeat once
         _repeatLayers = new int[_depth];
         Array.Fill(_repeatLayers, 1);
 
-        if (_hasWarnings)
+        if (HasWarnings)
         {
-            manager.PropLoadLogs += _properName + ":\n" + _warnings + "\n";
+            manager.PropLoadLogs += ProperName + ":\n" + Warnings + "\n";
         }
     }
 
-    public Vector3 CategoryColor() => _categoryColor;
-
-    public string Name() => _name;
-    public string ProperName() => _properName;
-    public string SearchName() => _searchName;
-
-    public bool HasWarnings() => _hasWarnings;
-    public string Warnings() => _warnings;
-
-    public IProp.UniformConstructor GetUniform() => cached => new RWDecalPropRenderUniform(
-        cached,
-        (Vector2)_size,
-        _variations
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
+        Name,
+        ProperName,
+        CompleteRenderDescription,
+        GetTexPos,
+        _size,
+        _repeatLayers,
+        _variations,
+        scene,
+        objectManager
     );
 
-    public IProp.TexPosCalculator GetTexPos() => (var, _) => new Vector2(_size.X * var,  1);
-    public ShaderSetDescription ShaderSetDescription() => RWUtils.DecalPropRendererShaderSet;
+    private RenderDescription CompleteRenderDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture) => new(
+        "decal_prop",
+        vertices,
+        indices,
+        GuiManager.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(
+                RWUtils.DecalPropTextureLayout,
+                texture,
+                camera.RemovalPass.RenderTexture.Texture
+            )
+        ),
+        new RWDecalPropRenderUniform(
+            instance,
+            _size
+        ),
+        false, false, true,
+        RWUtils.DecalPropLayouts, RWUtils.DecalPropShaders,
+        [], []
+    );
 
-    public int Variants() => _variations;
-
-    public Vector2Int Size() => _size;
-
-    public int[] RepeatLayers() => _repeatLayers;
-
-    public void LogWarning(string warn)
-    {
-        _hasWarnings = true;
-        _warnings += "\t" + warn  + "\n";
-    }
+    private Vector2 GetTexPos(int var, int _) => new(_size.X * var,  1);
 }

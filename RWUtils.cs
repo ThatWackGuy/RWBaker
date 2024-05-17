@@ -3,7 +3,7 @@ using RWBaker.Gui;
 using Veldrid;
 using Veldrid.SPIRV;
 
-namespace RWBaker.RWObjects;
+namespace RWBaker;
 
 public static class RWUtils
 {
@@ -15,12 +15,17 @@ public static class RWUtils
     public static ResourceLayout RWObjectDataLayout;
     public static ResourceLayout RWObjectTextureLayout;
 
-    public static ShaderSetDescription TileRendererShaderSet;
+    public static Shader[] TileShaders;
 
-    public static ShaderSetDescription StandardPropRendererShaderSet;
-    public static ShaderSetDescription SoftPropRendererShaderSet;
-    public static ShaderSetDescription DecalPropRendererShaderSet;
-    public static ShaderSetDescription AntimatterPropRendererShaderSet;
+    public static Shader[] StandardPropShaders;
+    public static Shader[] SoftPropShaders;
+    public static Shader[] DecalPropShaders;
+    public static ResourceLayout DecalPropTextureLayout;
+    public static ResourceLayout[] DecalPropLayouts;
+
+    public static Shader[] AntimatterPropShaders;
+    public static ResourceLayout AntimatterPropTextureLayout;
+    public static ResourceLayout[] AntimatterPropLayouts;
 
     #pragma warning restore CS8618
 
@@ -54,8 +59,12 @@ public static class RWUtils
 
         RWObjectDataLayout = factory.CreateResourceLayout(
             new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("SceneData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("RenderData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)
+                new ResourceLayoutElementDescription("CameraData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("StencilData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("LightingData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("PaletteData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("ObjectData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("Sampler", ResourceKind.Sampler, ShaderStages.Fragment)
             )
         );
 
@@ -63,43 +72,47 @@ public static class RWUtils
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("PaletteTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("EffectTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+                new ResourceLayoutElementDescription("ShadowTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("RemoveTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
             )
         );
 
-        RWResourceLayout = new[] { RWObjectDataLayout, RWObjectTextureLayout };
+        RWResourceLayout = [ RWObjectDataLayout, RWObjectTextureLayout ];
 
         // TILES
         ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
         ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
-        Shader[] tileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
-
-        TileRendererShaderSet = new ShaderSetDescription(RWVertexLayout, tileShaders);
+        TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
 
         // PROPS
         ShaderDescription standardVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.standardprop.vert"), "main");
         ShaderDescription standardFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.standardprop.frag"), "main");
-        Shader[] standardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
-
-        StandardPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, standardPropShaders);
+        StandardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
 
         ShaderDescription softVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.softprop.vert"), "main");
         ShaderDescription softFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.softprop.frag"), "main");
-        Shader[] softPropShaders = factory.CreateFromSpirv(softVert, softFrag);
-
-        SoftPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, softPropShaders);
+        SoftPropShaders = factory.CreateFromSpirv(softVert, softFrag);
 
         ShaderDescription decalVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.decalprop.vert"), "main");
         ShaderDescription decalFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.decalprop.frag"), "main");
-        Shader[] decalPropShaders = factory.CreateFromSpirv(decalVert, decalFrag);
+        DecalPropShaders = factory.CreateFromSpirv(decalVert, decalFrag);
 
-        DecalPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, decalPropShaders);
+        DecalPropTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("RemoveTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+            )
+        );
+        DecalPropLayouts = [ RWObjectDataLayout, DecalPropTextureLayout ];
 
         ShaderDescription antimatterVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.vert"), "main");
         ShaderDescription antimatterFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.frag"), "main");
-        Shader[] antimatterPropShaders = factory.CreateFromSpirv(antimatterVert, antimatterFrag);
+        AntimatterPropShaders = factory.CreateFromSpirv(antimatterVert, antimatterFrag);
 
-        AntimatterPropRendererShaderSet = new ShaderSetDescription(RWVertexLayout, antimatterPropShaders);
+        AntimatterPropTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+            )
+        );
+        AntimatterPropLayouts = [ RWObjectDataLayout, AntimatterPropTextureLayout ];
     }
 
     public static bool LingoBool(string line, out bool value)

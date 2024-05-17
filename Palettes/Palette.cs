@@ -23,10 +23,10 @@ public class Palette : IDisposable
         isMixed = false;
     }
 
-    private Palette(Palette palette1, Palette palette2, int blend)
+    private Palette(Palette palette1, Palette palette2, float blend)
     {
         Name = $"{palette1.Name} {blend} {palette2.Name}";
-        Image = ImageUtils.ImageMix(palette1.Image, palette2.Image, new Vector2Int(32, 16), (100 - blend) / 100f);
+        Image = ImageUtils.ImageMix(palette1.Image, palette2.Image, new Vector2Int(32, 16), (100f - blend) / 100f);
 
         Texture dTex = GuiManager.TextureFromImage(Image);
         DisplayTex = GuiTexture.Create(Name, dTex);
@@ -40,6 +40,8 @@ public class Palette : IDisposable
 
         return new Palette(palA, palB, blend);
     }
+
+    public static Palette MixPalettes(Palette palA, Palette palB, float blend) => new(palA, palB, blend);
 
     public void Dispose()
     {

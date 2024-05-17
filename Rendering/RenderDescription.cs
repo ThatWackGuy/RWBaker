@@ -1,46 +1,62 @@
 using System;
 using System.Runtime.InteropServices;
-using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker.Rendering;
 
 public struct RenderDescription : IDisposable
 {
+    public readonly string Id;
+
     public readonly RWVertexData[] Vertices;
     public readonly ushort[] Indices;
 
     public readonly ResourceSet? TextureSet;
-    public readonly bool HasTextureSet;
 
     public readonly int ObjectSizeInBytes;
     public readonly uint ObjectSizeForBuffer;
     public readonly IntPtr ObjectData;
 
-    public readonly Pipeline Pipeline;
+    public readonly bool UseRemoval;
+    public readonly bool UseLighting;
+    public readonly bool UseShaded;
 
-    public RenderDescription(RWVertexData[] vertices, ushort[] indices, IRenderable renderable, Scene scene)
+    public readonly ResourceLayout[] Layouts;
+    public readonly Shader[] Shaders;
+
+    public readonly RenderPass[] PassesBeforeEverything;
+    public readonly RenderPass[] PassesAfterEverything;
+
+    public RenderDescription(string id, RWVertexData[] vertices, ushort[] indices, ResourceSet? textureSet, object uniformStruct, bool useRemoval, bool useLighting, bool useShaded, ResourceLayout[] layouts, Shader[] shaders, RenderPass[] passesBeforeEverything, RenderPass[] passesAfterEverything)
     {
+        Id = id;
+
         Vertices = vertices;
         Indices = indices;
 
-        HasTextureSet = renderable.GetTextureSet(scene, out ResourceSet? textureSet);
         TextureSet = textureSet;
 
-        object data = renderable.CreateObjectData();
-        ObjectSizeInBytes = Marshal.SizeOf(data);
+        ObjectSizeInBytes = Marshal.SizeOf(uniformStruct);
         ObjectSizeForBuffer = 16 * (uint)float.Ceiling(ObjectSizeInBytes / 16f);
 
         ObjectData = Marshal.AllocHGlobal(ObjectSizeInBytes);
-        Marshal.StructureToPtr(data, ObjectData, false);
+        Marshal.StructureToPtr(uniformStruct, ObjectData, false);
 
-        Pipeline = renderable.GetPipeline();
+        UseRemoval = useRemoval;
+        UseLighting = useLighting;
+        UseShaded = useShaded;
+
+        Layouts = layouts;
+        Shaders = shaders;
+
+        PassesBeforeEverything = passesBeforeEverything;
+        PassesAfterEverything = passesAfterEverything;
     }
 
     public void Dispose()
     {
         // Pipeline belongs to the renderable, it must dispose the pipeline itself!
         Marshal.FreeHGlobal(ObjectData);
-        if (HasTextureSet) TextureSet!.Dispose();
+        TextureSet?.Dispose();
     }
 }

@@ -17,6 +17,40 @@ using Veldrid.StartupUtilities;
 
 namespace RWBaker.Gui;
 
+[Flags]
+public enum FreeTypeBuilderFlags : uint
+{
+    /// <summary>Disable hinting. This generally generates 'blurrier' bitmap glyphs when the glyph are rendered in any of the anti-aliased modes.</summary>
+    ImGuiFreeTypeBuilderFlags_NoHinting     = 1 << 0,
+
+    /// <summary>Disable auto-hinter.</summary>
+    ImGuiFreeTypeBuilderFlags_NoAutoHint    = 1 << 1,
+
+    /// <summary>Indicates that the auto-hinter is preferred over the font's native hinter.</summary>
+    ImGuiFreeTypeBuilderFlags_ForceAutoHint = 1 << 2,
+
+    /// <summary>A lighter hinting algorithm for gray-level modes. Many generated glyphs are fuzzier but better resemble their original shape. This is achieved by snapping glyphs to the pixel grid only vertically (Y-axis), as is done by Microsoft's ClearType and Adobe's proprietary font renderer. This preserves inter-glyph spacing in horizontal text.</summary>
+    ImGuiFreeTypeBuilderFlags_LightHinting  = 1 << 3,
+
+    /// <summary>Strong hinting algorithm that should only be used for monochrome output.</summary>
+    ImGuiFreeTypeBuilderFlags_MonoHinting   = 1 << 4,
+
+    /// <summary>Styling: Should we artificially embolden the font?</summary>
+    ImGuiFreeTypeBuilderFlags_Bold          = 1 << 5,
+
+    /// <summary>Styling: Should we slant the font, emulating italic style?</summary>
+    ImGuiFreeTypeBuilderFlags_Oblique       = 1 << 6,
+
+    /// <summary>Disable anti-aliasing. Combine this with MonoHinting for best results!</summary>
+    ImGuiFreeTypeBuilderFlags_Monochrome    = 1 << 7,
+
+    /// <summary>Enable FreeType color-layered glyphs</summary>
+    ImGuiFreeTypeBuilderFlags_LoadColor     = 1 << 8,
+
+    /// <summary>Enable FreeType bitmap glyphs</summary>
+    ImGuiFreeTypeBuilderFlags_Bitmap        = 1 << 9
+};
+
 public static class GuiManager
 {
     public static GraphicsDevice GraphicsDevice { get; private set; }
@@ -34,7 +68,10 @@ public static class GuiManager
     private static DeviceBuffer indexBuffer;
     private static DeviceBuffer projMatrixBuffer;
 
+    private static FontRef fontRef;
     private static GuiTexture fontTex;
+    private static bool awaitingFontChange;
+
     public static GuiTexture MissingTex { get; private set; }
     public static GuiTexture IconTexture { get; private set; }
 
@@ -65,6 +102,8 @@ public static class GuiManager
 
     public static void Load(UserData userData)
     {
+        Sdl2Native.SDL_SetHint("SDL_HINT_WINDOWS_DPI_SCALING", "1");
+
         // no.
         if (userData.WindowState == WindowState.Hidden) userData.WindowState = WindowState.Normal;
 
@@ -134,7 +173,7 @@ public static class GuiManager
         ImGuiIOPtr io = ImGui.GetIO();
         io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
         io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard | ImGuiConfigFlags.DockingEnable;
-        io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines;
+        io.Fonts.Flags |= ImFontAtlasFlags.NoBakedLines | ImFontAtlasFlags.NoMouseCursors;
         io.ConfigDockingWithShift = true;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
         io.ConfigDockingTransparentPayload = true;
@@ -260,19 +299,23 @@ public static class GuiManager
 
         mainResourceSet = ResourceFactory.CreateResourceSet(new ResourceSetDescription(projectionLayout, projMatrixBuffer, GraphicsDevice.PointSampler));
 
-        Texture missing = TextureFromResource("res.missingtex.png");
-        MissingTex = GuiTexture.Create("_missing", missing);
-
-        Texture iconTex = TextureFromResource("res.bakertex.png");
-        IconTexture = GuiTexture.Create("_icon", iconTex);
+        MissingTex = GuiTexture.CreateFromEmbedded("_missing", "res.missingtex.png");
+        IconTexture = GuiTexture.CreateFromEmbedded("_icon", "res.bakertex.png");
     }
 
     // TODO: Custom font support later?
-    public static void RecreateFonts()
+    private static void RecreateFonts()
     {
+        fontRef.Dispose();
+        fontTex?.Release();
+
         ImGuiIOPtr io = ImGui.GetIO();
 
+        io.Fonts.AddFontDefault();
+        fontRef = new FontRef(io.Fonts, Utils.GetEmbeddedBytes("res.ProggyVector-Regular.ttf"), "ProggyVector-Regular.ttf");
+
         io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytesPerPixel);
+        if (!io.Fonts.IsBuilt()) throw new Exception();
 
         Texture texture = ResourceFactory.CreateTexture(
             TextureDescription.Texture2D(
@@ -300,10 +343,12 @@ public static class GuiManager
         );
 
         fontTex = GuiTexture.Create("_defaultFont", texture);
+        fontTex.Use();
 
         io.Fonts.SetTexID(fontTex.Index);
-
         io.Fonts.ClearTexData();
+
+        awaitingFontChange = false;
     }
 
     public static void UpdateTextureFromImage(Texture texture, Image<Rgba32> image)
@@ -375,28 +420,6 @@ public static class GuiManager
         return texture;
     }
 
-    public static Texture TextureFromResource(string path)
-    {
-        Image<Rgba32> image = Image.Load<Rgba32>(Utils.GetEmbeddedBytes(path));
-
-        Texture texture = ResourceFactory.CreateTexture(
-            new TextureDescription(
-                (uint)image.Width,
-                (uint)image.Height,
-                1,
-                1,
-                1,
-                PixelFormat.R8_G8_B8_A8_UNorm,
-                TextureUsage.Sampled,
-                TextureType.Texture2D
-            )
-        );
-
-        UpdateTextureFromImage(texture, image);
-
-        return texture;
-    }
-
     public static void AddWindow(Window window)
     {
         if (windows.Any(w => w.InternalIdentifier == window.InternalIdentifier)) return;
@@ -417,14 +440,14 @@ public static class GuiManager
     }
 
     // Below is dedicated to ImGui
-    public static void Render(CommandList cl)
+    private static void Render(CommandList cl)
     {
         frameBegun = false;
         ImGui.Render();
         RenderImGui(ImGui.GetDrawData(), cl);
     }
 
-    public static void UpdateImGui(float deltaSeconds, InputSnapshot snapshot)
+    private static void UpdateImGui(float deltaSeconds, InputSnapshot snapshot)
     {
         if (frameBegun)
         {

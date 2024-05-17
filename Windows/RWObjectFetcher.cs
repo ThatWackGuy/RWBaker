@@ -1,7 +1,6 @@
 ﻿using System.Numerics;
 using ImGuiNET;
 using RWBaker.Palettes;
-using RWBaker.RWObjects;
 
 namespace RWBaker.Windows;
 

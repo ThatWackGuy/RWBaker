@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.RWObjects;
 
 namespace RWBaker.Tiles;
 
@@ -196,7 +195,7 @@ public class TileInfo
 
                 default:
                 {
-                    LogWarning($"Couldn't parse repeatL");
+                    LogWarning("Couldn't parse repeatL");
                     break;
                 }
             }

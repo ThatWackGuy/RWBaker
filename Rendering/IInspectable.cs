@@ -1,4 +1,4 @@
-﻿namespace RWBaker.RWObjects;
+﻿namespace RWBaker.Rendering;
 
 /// <summary>
 /// Implement to get inspector on right click

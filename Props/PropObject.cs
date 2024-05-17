@@ -5,23 +5,22 @@ using System.Numerics;
 using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker.Props;
 
-public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
+public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable, IDisposable
 {
+    public delegate RenderDescription CompleteDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture);
+    public delegate Vector2 TexPosCalculator(int variation, int layer);
+
     public readonly string Name;
-    public readonly string ProperName;
     public readonly int[] RenderRepeatLayers;
     public readonly int LayerCount;
-    public readonly Vector2Int PixelSize;
     public float Rotation; // Rotation in radians
 
-    private readonly IProp.UniformConstructor _uniformConstructor;
-    private readonly IProp.TexPosCalculator _texPosCalculator;
-    private readonly Pipeline _pipeline;
+    private readonly CompleteDescription _completeDesc;
+    private readonly TexPosCalculator _texPosCalculator;
 
     public readonly int Variants;
     private int _renderVariation;
@@ -34,7 +33,7 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public readonly int Depth;
 
-    public readonly Texture CachedTexture;
+    public readonly GuiTexture CachedTexture;
 
     /// <summary>Creates an empty prop object</summary>
     /// <remarks>Only use for lack of prop data!</remarks>
@@ -42,29 +41,25 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
     public PropObject() : base(null!, "")
     {
         Name = "";
-        ProperName = "";
 
-        _uniformConstructor = _ => throw new Exception();
+        _completeDesc = (_, _, _, _, _) => throw new Exception();
         _texPosCalculator = (_, _) => throw new Exception();
 
         RenderRepeatLayers = new[] { 1 };
         LayerCount = 1;
 
-        PixelSize = Vector2Int.One;
+        Size = Vector2.One;
 
         Variants = 1;
 
         Depth = 1;
 
-        _pipeline = null!;
-
-        CachedTexture = GuiManager.MissingTex.Texture;
+        CachedTexture = GuiManager.MissingTex;
     }
 
-    public PropObject(Scene scene, RWObjectManager manager, IProp cache) : base(scene, cache.ProperName())
+    public PropObject(string name, string properName, CompleteDescription completeDescription, TexPosCalculator texPosCalculator, Vector2 size, int[] repeatLayers, int variants, Scene scene, RWObjectManager manager) : base(scene, properName)
     {
-        Name = cache.Name();
-        ProperName = cache.ProperName();
+        Name = name;
 
         string texturePath = Path.Combine(manager.PropsDir, $"{Name}.png");
 
@@ -73,22 +68,10 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
             throw new FileNotFoundException("Please check the names or if the file has been deleted!");
         }
 
-        _uniformConstructor = cache.GetUniform();
-        _texPosCalculator = cache.GetTexPos();
+        _completeDesc = completeDescription;
+        _texPosCalculator = texPosCalculator;
 
-        _pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
-            new GraphicsPipelineDescription(
-                BlendStateDescription.SingleAlphaBlend,
-                new DepthStencilStateDescription(true, true, ComparisonKind.LessEqual),
-                new RasterizerStateDescription(FaceCullMode.None, PolygonFillMode.Solid, FrontFace.Clockwise, false, false),
-                PrimitiveTopology.TriangleList,
-                cache.ShaderSetDescription(),
-                RWUtils.RWResourceLayout,
-                scene.ObjectFramebuffer.OutputDescription
-            )
-        );
-
-        RenderRepeatLayers = cache.RepeatLayers();
+        RenderRepeatLayers = repeatLayers;
 
         if (RenderRepeatLayers.Length > 30)
         {
@@ -115,35 +98,59 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
         }
 
         LayerCount = RenderRepeatLayers.Sum();
-
-        PixelSize = cache.Size();
-
-        Variants = cache.Variants();
-
         Depth = RenderRepeatLayers.Sum();
 
-        CachedTexture = GuiManager.TextureFromImage(texturePath);
+        Variants = variants;
+
+        Size = size;
+
+        if (!GuiTexture.TryGetTexture($"_prop{OriginalName}", out CachedTexture!))
+        {
+            CachedTexture = GuiTexture.Create($"_prop{OriginalName}", GuiManager.TextureFromImage(texturePath));
+        }
+        CachedTexture.Use();
     }
 
     public void RenderInspector()
     {
-        int x = (int)Position.X;
-        int y = (int)Position.Y;
+        ImGui.DragFloat("X", ref Position.X);
+        ImGui.DragFloat("Y", ref Position.Y);
+
         int z = (int)Position.Z;
-        ImGui.SliderInt("X", ref x, 0, (int)Scene.Width);
-        ImGui.SliderInt("Y", ref y, 0, (int)Scene.Height);
         ImGui.SliderInt("Layer", ref z, 0, 29 - Depth);
+        Position.Z = z;
+
+        if (Variants > 1)
+        {
+            ImGui.SliderInt("Variant", ref _renderVariation, 0, Variants - 1);
+        }
 
         ImGui.SliderAngle("Rotate", ref Rotation);
-
-        Position.X = x;
-        Position.Y = y;
-        Position.Z = z;
     }
 
-    public RenderDescription GetRenderDescription(Scene scene)
+    public void RenderSceneRepresentation(ImDrawListPtr dl, Vector2 objectScreenPos)
     {
-        var vertices = new RWVertexData[LayerCount * 4];
+        /*
+        // Y ARROW
+        Vector2 YDragEnd = objectScreenPos with { Y = objectScreenPos.Y - 70 };
+        dl.AddLine(objectScreenPos, YDragEnd, Utils.IM_RED, 4);
+        YDragEnd.Y -= 5;
+        dl.AddTriangleFilled(YDragEnd with { X = YDragEnd.X - 6, Y = YDragEnd.Y + 12 }, YDragEnd, YDragEnd with { X = YDragEnd.X + 6, Y = YDragEnd.Y + 12 }, Utils.IM_RED);
+
+        // X ARROW
+        YDragEnd = objectScreenPos with { X = objectScreenPos.X + 70 };
+        dl.AddLine(objectScreenPos, YDragEnd, Utils.IM_GREEN, 4);
+        YDragEnd.X += 5;
+        dl.AddTriangleFilled(YDragEnd with { X = YDragEnd.X - 12, Y = YDragEnd.Y - 6 }, YDragEnd with { X = YDragEnd.X - 12, Y = YDragEnd.Y + 6 }, YDragEnd, Utils.IM_GREEN);
+
+        // MIDDLE
+        dl.AddCircleFilled(objectScreenPos, 6, Utils.IM_WHITE, 4);
+        */
+    }
+
+    public RenderDescription GetRenderDescription(Camera camera)
+    {
+        RWVertexData[] vertices = new RWVertexData[LayerCount * 4];
         ushort[] indices = new ushort[LayerCount * 6];
 
         int vertIndex = 0;
@@ -153,33 +160,31 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
         {
             if (RenderRepeatLayers[imgLayer] == 0) continue;
 
-            // Vector2 vertPos = new Vector2(float.Max(per.X * -1, 0), float.Max(per.Y * -1, 0)) * (renderRepeatLayers.Length - 1) + per * imgLayer
             Vector2 texPos = _texPosCalculator(RenderVariation, imgLayer);
-            Vector2 texSize = (Vector2)PixelSize;
 
             for (int repeat = 0; repeat < RenderRepeatLayers[imgLayer]; repeat++)
             {
                 vertices[vertIndex] = new RWVertexData(
-                    Position + new Vector3(Vector2.Zero, renderLayer),
+                    Position + new Vector3(-Size.X / 2, Size.Y / 2, renderLayer),
                     texPos,
                     RgbaFloat.Clear
                 ); // Top Left
 
                 vertices[vertIndex + 1] = new RWVertexData(
-                    Position + new Vector3(PixelSize.X, 0, renderLayer),
-                    texPos with { X = texPos.X + texSize.X },
+                    Position + new Vector3(Size.X / 2, Size.Y / 2, renderLayer),
+                    texPos with { X = texPos.X + Size.X },
                     RgbaFloat.Clear
                 ); // Top Right
 
                 vertices[vertIndex + 2] = new RWVertexData(
-                    Position + new Vector3(PixelSize.X, PixelSize.Y, renderLayer),
-                    texPos + texSize,
+                    Position + new Vector3(Size.X / 2, -Size.Y / 2, renderLayer),
+                    texPos + Size,
                     RgbaFloat.Clear
                 ); // Bottom Right
 
                 vertices[vertIndex + 3] = new RWVertexData(
-                    Position + new Vector3(0, PixelSize.Y, renderLayer),
-                    texPos with { Y = texPos.Y + texSize.Y },
+                    Position + new Vector3(-Size.X / 2, -Size.Y / 2, renderLayer),
+                    texPos with { Y = texPos.Y + Size.Y },
                     RgbaFloat.Clear
                 ); // Bottom Left
 
@@ -197,34 +202,15 @@ public class PropObject : SceneObject, IRenderable, IInspectable, IDisposable
             }
         }
 
-        return new RenderDescription(vertices, indices, this, scene);
+        return _completeDesc(vertices, indices, this, camera, CachedTexture.Texture);
     }
 
-    public object CreateObjectData() => _uniformConstructor(this);
-
-    public Vector2Int GetRenderSize(Scene scene) => PixelSize + (LayerCount - 1) * Vector2.Abs(scene.ObjectOffset);
-
-    public Pipeline GetPipeline() => _pipeline;
-
-    public bool GetTextureSet(Scene scene, out ResourceSet textureSet)
-    {
-        textureSet = GuiManager.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.RWObjectTextureLayout,
-                CachedTexture,
-                scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
-                scene.PaletteManager.EffectColors.Texture,
-                scene.ShadowRender.Texture
-            )
-        );
-
-        return true;
-    }
+    public Vector2Int GetRenderSize(Camera camera) => (Vector2Int)Size + (LayerCount - 1) * Vector2.One; // TODO: FIX
 
     public void Dispose()
     {
         CachedTexture.Dispose();
-        _pipeline.Dispose();
+
         GC.SuppressFinalize(this);
     }
 }

@@ -3,26 +3,15 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using RWBaker.Gui;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 using SixLabors.ImageSharp;
 using Veldrid;
 
 namespace RWBaker.Props;
 
-public class SoftProp : IProp
+public class SoftProp : Prop
 {
-    // default fields
-    private bool _hasWarnings;
-    private string _warnings;
-
-    private readonly string _category;
-    private readonly Vector3 _categoryColor;
-
-    private readonly string _name;
-    private readonly string _properName;
-    private readonly string _searchName;
-
     private readonly PropTag _tags;
 
     private readonly int _variations;
@@ -31,10 +20,12 @@ public class SoftProp : IProp
     private readonly string[] _notes;
 
     // soft prop fields
-    private readonly Vector2Int _size;
+    private readonly Vector2 _size;
     private readonly int _depth;
     private readonly int[] _repeatLayers;
     private readonly bool _colorize;
+    private readonly bool _round;
+    private readonly bool _selfShade;
     private readonly int _smoothShading;
     private readonly float _contourExponent;
     private readonly float _highlightMin;
@@ -43,16 +34,13 @@ public class SoftProp : IProp
 
     public SoftProp(RWObjectManager manager, PropType type, string line, string category, Vector3 categoryColor)
     {
-        _hasWarnings = false;
-        _warnings = "";
+        Category = category;
+        CategoryColor = categoryColor;
 
-        _category = category;
-        _categoryColor = categoryColor;
+        Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
+        ProperName = $"{Category} - {Name}";
 
-        _name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
-        _properName = $"{_category} - {_name}";
-
-        string filePath = Path.Combine(manager.PropsDir, $"{_name}.png");
+        string filePath = Path.Combine(manager.PropsDir, $"{Name}.png");
         bool fileExists = true;
         if (!File.Exists(filePath))
         {
@@ -60,7 +48,7 @@ public class SoftProp : IProp
             LogWarning("The image for the prop couldn't be found. Please check the names or if the file has been deleted.");
         }
 
-        _size = Vector2Int.One;
+        _size = Vector2.One;
         switch (type)
         {
             // unvaried soft props have implicit sizes
@@ -70,24 +58,27 @@ public class SoftProp : IProp
 
                 using Image propImg = Image.Load(filePath);
                 _size.X = propImg.Size.Width;
-                _size.Y = propImg.Size.Height;
+                _size.Y = propImg.Size.Height - 1;
 
                 break;
             }
 
             case PropType.VariedSoft:
             {
+                Vector2Int intv2;
                 Match sizeStr = Regex.Match(line, @"#pxlSize *: *point\( *([0-9]+) *, *([0-9]+) *\)");
-                if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out _size.X))
+                if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out intv2.X))
                 {
                     _size.X = 1;
                     LogWarning("Couldn't parse Size X component");
                 }
-                if (!RWUtils.LingoInt(sizeStr.Groups[2].Value, out _size.Y))
+                if (!RWUtils.LingoInt(sizeStr.Groups[2].Value, out intv2.Y))
                 {
                     _size.Y = 1;
                     LogWarning("Couldn't parse Size Y component");
                 }
+
+                _size = (Vector2)intv2;
 
                 break;
             }
@@ -136,6 +127,22 @@ public class SoftProp : IProp
             }
 
             _colorize = false;
+        }
+
+        // ROUND
+        string roundStr = Regex.Match(line, "#round *: *([0-1]){1}").Groups[1].Value;
+        if (!RWUtils.LingoBool(roundStr, out _round))
+        {
+            LogWarning("Round couldn't be parsed! Defaulting to no round");
+            _round = false;
+        }
+
+        // SELF SHADE
+        string selfShadeStr = Regex.Match(line, "#round *: *([0-1]){1}").Groups[1].Value;
+        if (!RWUtils.LingoBool(selfShadeStr, out _selfShade))
+        {
+            LogWarning("Self shading couldn't be parsed! Defaulting to none");
+            _selfShade = false;
         }
 
         // SMOOTH SHADING
@@ -204,51 +211,60 @@ public class SoftProp : IProp
             _tags |= tag;
         }
 
-        _searchName = $"{_category} {_name} {type} {string.Join(' ', _tags)} {_size.X}x{_size.Y}".ToLower();
+        SearchName = $"{Category} {Name} {type} {string.Join(' ', _tags)} {_size.X}x{_size.Y}".ToLower();
 
         // soft props only repeat once
-        _repeatLayers = new int[_depth];
+        _repeatLayers = new int[_round ? _depth : _depth * 2];
         Array.Fill(_repeatLayers, 1);
 
-        if (_hasWarnings)
+        if (HasWarnings)
         {
-            manager.PropLoadLogs += _properName + ":\n" + _warnings + "\n";
+            manager.PropLoadLogs += ProperName + ":\n" + Warnings + "\n";
         }
     }
 
-    public Vector3 CategoryColor() => _categoryColor;
-
-    public string Name() => _name;
-    public string ProperName() => _properName;
-    public string SearchName() => _searchName;
-
-    public bool HasWarnings() => _hasWarnings;
-    public string Warnings() => _warnings;
-
-    public IProp.UniformConstructor GetUniform() => cached => new RWSoftPropRenderUniform(
-        cached,
-        (Vector2)_size,
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
+        Name,
+        ProperName,
+        CompleteRenderDescription,
+        GetTexPos,
+        _size,
+        _repeatLayers,
         _variations,
-        _colorize /*flag check to see if it is colored*/,
-        _smoothShading,
-        _contourExponent,
-        _highlightMin,
-        _shadowMin,
-        _highlightExponent
+        scene,
+        objectManager
     );
 
-    public IProp.TexPosCalculator GetTexPos() => (var, _) => new Vector2(_size.X * var,  1);
-    public ShaderSetDescription ShaderSetDescription() => RWUtils.SoftPropRendererShaderSet;
+    private RenderDescription CompleteRenderDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture) => new(
+        "soft_prop",
+        vertices,
+        indices,
+        GuiManager.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(
+                RWUtils.RWObjectTextureLayout,
+                texture,
+                camera.Scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
+                camera.Scene.PaletteManager.EffectColors.Texture,
+                camera.LightingPass.DepthTexture,
+                camera.RemovalPass.RenderTexture.Texture
+            )
+        ),
+        new RWSoftPropRenderUniform(
+            instance,
+            _size,
+            _variations,
+            _colorize,
+            _round,
+            _selfShade ? _smoothShading : 0,
+            _contourExponent,
+            _highlightMin,
+            _shadowMin,
+            _highlightExponent
+        ),
+        false, true, true,
+        RWUtils.RWResourceLayout, RWUtils.SoftPropShaders,
+        [], []
+    );
 
-    public int Variants() => _variations;
-
-    public Vector2Int Size() => _size;
-
-    public int[] RepeatLayers() => _repeatLayers;
-
-    public void LogWarning(string warn)
-    {
-        _hasWarnings = true;
-        _warnings += "\t" + warn  + "\n";
-    }
+    private Vector2 GetTexPos(int var, int _) => new(_size.X * var,  1);
 }

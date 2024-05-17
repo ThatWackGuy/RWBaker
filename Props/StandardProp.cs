@@ -2,8 +2,8 @@
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using RWBaker.Gui;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 using Veldrid;
 
 namespace RWBaker.Props;
@@ -14,19 +14,8 @@ public enum PropColorTreatment
     Bevel
 }
 
-public class StandardProp : IProp
+public class StandardProp : Prop
 {
-    // default fields
-    private bool _hasWarnings;
-    private string _warnings;
-
-    private readonly string _category;
-    private readonly Vector3 _categoryColor;
-
-    private readonly string _name;
-    private readonly string _properName;
-    private readonly string _searchName;
-
     private readonly PropTag _tags;
 
     private readonly int _variations;
@@ -34,7 +23,7 @@ public class StandardProp : IProp
     private readonly string[] _notes;
 
     // standard prop fields
-    private readonly Vector2Int _size;
+    private readonly Vector2 _size;
     private readonly int[] _repeatLayers;
 
     private readonly PropColorTreatment _treatment;
@@ -44,14 +33,11 @@ public class StandardProp : IProp
 
     public StandardProp(RWObjectManager manager, PropType type, string line, string category, Vector3 categoryColor)
     {
-        _hasWarnings = false;
-        _warnings = "";
+        Category = category;
+        CategoryColor = categoryColor;
 
-        _category = category;
-        _categoryColor = categoryColor;
-
-        _name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
-        _properName = $"{_category} - {_name}";
+        Name = Regex.Match(line, "#nm *: *\"(.*?)\"").Groups[1].Value;
+        ProperName = $"{Category} - {Name}";
 
         Match sizeStr = Regex.Match(line, @"#sz *: *point\( *([0-9]+) *, *([0-9]+) *\)");
         if (!RWUtils.LingoInt(sizeStr.Groups[1].Value, out int sizeX))
@@ -64,14 +50,14 @@ public class StandardProp : IProp
             sizeY = 1;
             LogWarning("Couldn't parse Size Y component");
         }
-        _size = new Vector2Int(sizeX, sizeY);
+        _size = new Vector2(sizeX, sizeY);
 
         // REPEATING LAYERS
         string[] repeatLayers = Regex.Match(line, @"#repeatL *: *\[(.*?)\]").Groups[1].Value.Replace(" ", "").Split(",");
 
         if (!RWUtils.LingoIntArray(repeatLayers, out _repeatLayers))
         {
-            LogWarning($"Couldn't parse repeatL");
+            LogWarning("Couldn't parse repeatL");
         }
 
         if (_repeatLayers.Length > 30)
@@ -139,49 +125,56 @@ public class StandardProp : IProp
         }
 
         // SEARCH NAME
-        _searchName = $"{_category} {_name} {type} {string.Join(' ', _tags)} {sizeX}x{sizeY}".ToLower();
+        SearchName = $"{Category} {Name} {type} {string.Join(' ', _tags)} {sizeX}x{sizeY}".ToLower();
 
-        if (!File.Exists(manager.PropsDir + "/" + _name + ".png"))
+        if (!File.Exists(manager.PropsDir + "/" + Name + ".png"))
         {
             LogWarning("The image for the prop couldn't be found. Please check the names or if the file has been deleted.");
         }
 
-        if (_hasWarnings)
+        if (HasWarnings)
         {
-            manager.PropLoadLogs += _properName + ":\n" + _warnings + "\n";
+            manager.PropLoadLogs += ProperName + ":\n" + Warnings + "\n";
         }
     }
 
-    public Vector3 CategoryColor() => _categoryColor;
-
-    public string Name() => _name;
-    public string ProperName() => _properName;
-    public string SearchName() => _searchName;
-
-    public bool HasWarnings() => _hasWarnings;
-    public string Warnings() => _warnings;
-
-    public IProp.UniformConstructor GetUniform() => cached => new RWStandardPropRenderUniform(
-        cached,
-        (Vector2)_size * 20,
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
+        Name,
+        ProperName,
+        CompleteRenderDescription,
+        GetTexPos,
+        _size * 20,
+        _repeatLayers,
         _variations,
-        _bevelAmount,
-        (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/
+        scene,
+        objectManager
     );
 
-    public IProp.TexPosCalculator GetTexPos() => (var, layer) => new Vector2(_size.X * 20 * var,  1 + layer * _size.Y * 20);
+    private RenderDescription CompleteRenderDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture) => new(
+        "standard_prop",
+        vertices,
+        indices,
+        GuiManager.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(
+                RWUtils.RWObjectTextureLayout,
+                texture,
+                camera.Scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
+                camera.Scene.PaletteManager.EffectColors.Texture,
+                camera.LightingPass.RenderTexture.Texture,
+                camera.RemovalPass.RenderTexture.Texture
+            )
+        ),
+        new RWStandardPropRenderUniform(
+            instance,
+            _size * 20,
+            _variations,
+            _bevelAmount,
+            (_tags & PropTag.Colored) != 0 /*flag check to see if it is colored*/
+        ),
+        false, true, true,
+        RWUtils.RWResourceLayout, RWUtils.StandardPropShaders,
+        [], []
+    );
 
-    public ShaderSetDescription ShaderSetDescription() => RWUtils.StandardPropRendererShaderSet;
-
-    public int Variants() => _variations;
-
-    public Vector2Int Size() => _size * 20;
-
-    public int[] RepeatLayers() => _repeatLayers;
-
-    public void LogWarning(string warn)
-    {
-        _hasWarnings = true;
-        _warnings += "\t" + warn  + "\n";
-    }
+    private Vector2 GetTexPos(int var, int layer) => new(_size.X * 20 * var,  1 + layer * _size.Y * 20);
 }

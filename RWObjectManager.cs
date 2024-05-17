@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using RWBaker.Props;
 using RWBaker.Tiles;
 
-namespace RWBaker.RWObjects;
+namespace RWBaker;
 
 public class RWObjectManager
 {
@@ -16,7 +16,7 @@ public class RWObjectManager
     public string TileLoadLogs = "";
     public event ObjectsChangedEvent TilesChanged = () => { };
 
-    public readonly List<IProp> Props = new();
+    public readonly List<Prop> Props = new();
     public string PropLoadLogs = "";
     public event ObjectsChangedEvent PropsChanged = () => { };
 
@@ -24,13 +24,13 @@ public class RWObjectManager
     public string TileLastSearched;
     public string TileLastUsed;
     public bool TileUseUnlit;
-    public bool TileUseRain;
+    public float TileUseRain;
 
     public string PropsDir;
     public string PropLastSearched;
     public string PropLastUsed;
     public bool PropUseUnlit;
-    public bool PropUseRain;
+    public float PropUseRain;
 
     public RWObjectManager(UserData userData)
     {
@@ -135,12 +135,12 @@ public class RWObjectManager
         foreach (string line in initLines)
         {
             // empty line or comment
-            if (Regex.IsMatch(line, "^\\s*$") || Regex.IsMatch(line, "^--\\w*\\n")) continue;
+            if (Regex.IsMatch(line, "^\\s*$") || line.StartsWith("--")) continue;
 
             // category definition
-            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
+            if (Regex.IsMatch(line, "-\\[\"(.+?)\",\\s*color\\s*\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]"))
             {
-                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
+                GroupCollection categoryInfo = Regex.Match(line, "-\\[\"(.+?)\",\\s*color\\s*\\(((?:\\s*[0-9]+\\s*,?){3})\\)\\]").Groups;
                 lastCategory = categoryInfo[1].Value;
                 string[] colorsNums = categoryInfo[2].Value.Replace(" ", "").Split(',');
                 lastColor.X = int.Parse(colorsNums[0]);
@@ -158,7 +158,7 @@ public class RWObjectManager
                 defaultType = true;
             }
 
-            IProp prop = propType switch
+            Prop prop = propType switch
             {
                 PropType.Standard or PropType.VariedStandard => new StandardProp(this, propType, line, lastCategory, lastColor),
                 PropType.Soft or PropType.VariedSoft => new SoftProp(this, propType, line, lastCategory, lastColor),

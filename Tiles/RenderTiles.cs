@@ -4,11 +4,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using ImGuiNET;
+using RWBaker.Gui;
 using RWBaker.Palettes;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 using RWBaker.Windows;
+using Veldrid;
 
 namespace RWBaker.Tiles;
 
@@ -18,30 +20,30 @@ public class RenderSingleTiles : Window
     private PaletteManager palettes => Program.PaletteManager;
 
     private readonly Scene scene;
+    private readonly Camera camera;
 
     private TileObject tile;
     private IEnumerable<TileInfo>? searchedTiles;
     private int variation;
-    private int background;
+    private CameraBgState background;
     private bool needsRerender;
     private bool sceneSizeChanged;
     private long renderTime;
     private float sizing;
     private int shadowRepeat;
 
-    private Vector2 renderOffset;
-    private Vector2 perRenderOffset => (renderOffset / 100) * (Vector2)tile.PixelSize;
-    private Vector2 lightOffset;
-    private Vector2 perLightOffset => (lightOffset / 100) * (Vector2)tile.PixelSize;
-
     private readonly Vector4 rectOutlineCol;
 
-    public RenderSingleTiles() : base("Render Tile", "_renderTile")
+    private int renderAllCounter;
+    private int renderAllSize;
+
+    public RenderSingleTiles() : base("Render Tiles", "_renderTiles")
     {
         scene = new Scene();
+        camera = new Camera(scene);
 
-        renderOffset = Vector2.Zero;
-        lightOffset = Vector2.Zero;
+        scene.AddObject(camera);
+        scene.SetActiveCamera(camera);
 
         if (objects.Tiles.Count == 0)
         {
@@ -72,6 +74,9 @@ public class RenderSingleTiles : Window
 
         unsafe { rectOutlineCol = *ImGui.GetStyleColorVec4(ImGuiCol.Border); }
 
+        renderAllCounter = objects.Tiles.Count;
+        renderAllSize = objects.Tiles.Count;
+
         palettes.PalettesChanged += PalettesChanged;
         objects.TilesChanged += TilesChanged;
     }
@@ -101,6 +106,9 @@ public class RenderSingleTiles : Window
 
         scene.AddObject(tile);
         needsRerender = true;
+
+        renderAllCounter = objects.Tiles.Count;
+        renderAllSize = objects.Tiles.Count;
     }
 
     private void ReRender()
@@ -112,14 +120,11 @@ public class RenderSingleTiles : Window
 
         if (sceneSizeChanged)
         {
-            scene.Resize(tile);
+            camera.Resize(tile);
         }
 
-        scene.ShadowRepeat = shadowRepeat;
-        scene.Rain = objects.TileUseRain;
-        scene.SetBackground(background);
-        scene.Unlit = objects.TileUseUnlit;
-        scene.Rain = objects.TileUseRain;
+        camera.RainPercentage = objects.TileUseRain / 100;
+        camera.Unlit = objects.TileUseUnlit;
         scene.Render();
 
         needsRerender = false;
@@ -137,7 +142,7 @@ public class RenderSingleTiles : Window
 
     protected override void Draw()
     {
-        Begin();
+        if (!Begin()) return;
 
         if (objects.Tiles.Count == 0)
         {
@@ -189,9 +194,6 @@ public class RenderSingleTiles : Window
             ImGui.EndCombo();
         }
 
-        ImGui.Spacing();
-        ImGui.Spacing();
-
         int vars = variation;
         if (tile.Variants > 1)
         {
@@ -200,67 +202,101 @@ public class RenderSingleTiles : Window
 
         string bgName = background switch
         {
-            0 => "Clear",
-            1 => "White",
-            2 => "Sky",
+            CameraBgState.Clear => "Clear",
+            CameraBgState.Sky => "Sky",
+            CameraBgState.White => "White",
+            CameraBgState.Custom => "Custom",
             _ => "UNKNOWN"
         };
 
-        int bg = background;
-        ImGui.SliderInt("Background", ref background, 0, 2, bgName);
+        if (ImGui.BeginCombo("Background", bgName))
+        {
+            if (ImGui.Selectable("Clear"))
+            {
+                background = CameraBgState.Clear;
+                camera.SetBackground(background);
+                needsRerender = true;
+            }
 
-        ImGui.Spacing();
-        ImGui.Spacing();
+            if (ImGui.Selectable("Sky"))
+            {
+                background = CameraBgState.Sky;
+                camera.SetBackground(background);
+                needsRerender = true;
+            }
 
-        ImGui.SliderFloat("Layer Offset X", ref renderOffset.X, -50, 50);
-        ImGui.SliderFloat("Layer Offset Y", ref renderOffset.Y, -50, 50);
-        if (ImGui.Button("Reset Layer Offset")) renderOffset = Vector2.Zero;
+            if (ImGui.Selectable("White"))
+            {
+                background = CameraBgState.White;
+                camera.SetBackground(background);
+                needsRerender = true;
+            }
 
-        ImGui.Spacing();
-        ImGui.Spacing();
+            if (ImGui.Selectable("Custom"))
+            {
+                background = CameraBgState.Custom;
+                needsRerender = true;
+            }
 
-        ImGui.SliderFloat("Light Offset X", ref lightOffset.X, -50, 50);
-        ImGui.SliderFloat("Light Offset Y", ref lightOffset.Y, -50, 50);
-        if (ImGui.Button("Reset Light Offset")) lightOffset = Vector2.Zero;
+            ImGui.EndCombo();
+        }
 
-        ImGui.Spacing();
-        ImGui.Spacing();
+        if (background == CameraBgState.Custom)
+        {
+            Vector4 col = camera.BackgroundColor.ToVector4();
+            if (ImGui.ColorEdit4("Custom Background", ref col))
+            {
+                camera.SetBackground(new RgbaFloat(col));
+                needsRerender = true;
+            }
+        }
 
         int ly = (int)tile.Position.Z;
         int lyCheck = ly;
         ImGui.SliderInt("Layer", ref ly, 0, tile.HasSpecs2 ? 1 : 2);
         tile.Position.Z = ly;
 
-        ImGui.Spacing();
-        ImGui.Spacing();
-
         int sr = shadowRepeat;
         ImGui.SliderInt("Shadow Repeat", ref shadowRepeat, 1, 40);
 
-        ImGui.Spacing();
-        ImGui.Spacing();
+        if (ImGui.SliderFloat("Use Rain Palette", ref objects.TileUseRain, 0, 100)) needsRerender = true;
 
         if (ImGui.Checkbox("Use Unlit Palette", ref objects.TileUseUnlit)) needsRerender = true;
-        if (ImGui.Checkbox("Use Rain Palette", ref objects.TileUseRain)) needsRerender = true;
-
-        Vector2Int rSize = tile.GetRenderSize(scene);
-        if (rSize.X != scene.Width || rSize.Y != scene.Height || perLightOffset != scene.LightAngle)
+        Vector2Int rSize = tile.GetRenderSize(camera);
+        if (rSize.X != camera.Width || rSize.Y != camera.Height)
         {
             sceneSizeChanged = true;
             needsRerender = true;
         }
 
-        if (perRenderOffset != scene.ObjectOffset)
-        {
-            scene.ObjectOffset = perRenderOffset;
-            scene.LightAngle = perLightOffset;
-
-            needsRerender = true;
-        }
-
-        if (bg != background || vars != variation || lyCheck != ly || sr != shadowRepeat) needsRerender = true;
+        if (vars != variation || lyCheck != ly || sr != shadowRepeat) needsRerender = true;
 
         ImGui.SeparatorText("RENDER");
+
+        if (ImGui.TreeNode("Render All"))
+        {
+            ImGui.TextDisabled("Warning: Render All disregards variant and given depth");
+            ImGui.TextDisabled("Bulk renders are placed in GraphicsDir/Rendered/Bulk/");
+            if (renderAllSize != 0 && renderAllCounter == renderAllSize)
+            {
+                if (ImGui.Button("Render All"))
+                {
+                    Directory.CreateDirectory($"{objects.GraphicsDir}/Rendered/Bulk/");
+
+                    renderAllCounter = 0;
+                    renderAllSize = 0;
+                    ThreadPool.QueueUserWorkItem(RenderAll);
+                }
+            }
+            else
+            {
+                ImGui.Text(renderAllSize == 0 ? "Caching textures..." : "Rendering...");
+                int renderAllAppropriateSize = renderAllSize == 0 ? objects.Tiles.Count : renderAllSize;
+                ImGui.ProgressBar((float)renderAllCounter / renderAllAppropriateSize, Vector2.Zero,  $"{renderAllCounter}/{renderAllAppropriateSize}");
+            }
+
+            ImGui.TreePop();
+        }
 
         if (ImGui.Button("Reset sizing"))
         {
@@ -274,16 +310,55 @@ public class RenderSingleTiles : Window
         if (ImGui.Button("Save as Image"))
         {
             Directory.CreateDirectory($"{objects.GraphicsDir}/Rendered/");
-            scene.SaveToFile($"{objects.GraphicsDir}/Rendered/{tile.Name}.png");
+            camera.SaveToFile($"{objects.GraphicsDir}/Rendered/{tile.Name}.png");
         }
 
-        ImGui.Image(scene.ObjectRender.Index, scene.ObjectRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.Image(camera.ColorPass.RenderTexture.Index, camera.ColorPass.RenderTexture.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
         ImGui.SameLine();
-        ImGui.Image(scene.ShadowRender.Index, scene.ShadowRender.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        ImGui.Image(camera.LightingPass.RenderTexture.Index, camera.LightingPass.RenderTexture.Size * sizing, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
 
         ImGui.TextDisabled($"{renderTime} ms");
 
         ImGui.End();
+    }
+
+    private void RenderAll(object? callback)
+    {
+        using Scene renderAllScene = new();
+        using Camera renderAllCamera = new(renderAllScene);
+
+        scene.AddObject(camera);
+        scene.SetActiveCamera(camera);
+
+        camera.RainPercentage = objects.TileUseRain;
+        camera.SetBackground(background);
+        camera.Unlit = objects.TileUseUnlit;
+        camera.RainPercentage = objects.TileUseRain;
+
+        TileObject[] tiles = objects.Tiles.Where(t => File.Exists(Path.Combine(objects.GraphicsDir, $"{t.Name}.png"))).Select(t => new TileObject(renderAllScene, objects, t)).ToArray();
+        renderAllSize = tiles.Length;
+
+        foreach (TileObject t in tiles)
+        {
+            renderAllCamera.Resize(t);
+
+            renderAllScene.AddObject(t);
+
+            renderAllScene.Render();
+            GuiManager.GraphicsDevice.WaitForIdle();
+            renderAllCamera.SaveToFile($"{objects.GraphicsDir}/Rendered/Bulk/{t.Name}.png");
+
+            renderAllScene.RemoveObject(t);
+
+            renderAllCounter++;
+        }
+
+        GuiManager.GraphicsDevice.WaitForIdle();
+
+        foreach (TileObject o in tiles)
+        {
+            o.Dispose();
+        }
     }
 
     protected override void Destroy()

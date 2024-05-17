@@ -3,20 +3,20 @@ using System.Numerics;
 using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Rendering;
-using RWBaker.RWObjects;
 
 namespace RWBaker.Windows;
 
 public class SceneBuilder : Window
 {
     private readonly Scene _scene;
-    private Vector2 _sceneSize;
     private IInspectable? _inspecting;
     private IRenderable? _inspectingRenderable;
+    private ISceneEditable? _inspectingEditable;
     private SceneObject? _inspectingObject;
 
+    private bool setWindowToMinimumSize;
     private bool needsResize = true;
-    private bool viewShadows;
+    private int viewStencil;
     private Vector2 currentCanvasSize = Vector2.One;
     private readonly Vector4 rectOutlineCol;
 
@@ -25,63 +25,110 @@ public class SceneBuilder : Window
         _scene = new Scene();
         _inspecting = _scene;
 
+        Camera firstCamera = new(_scene);
+
+        _scene.AddObject(firstCamera);
+        _scene.SetActiveCamera(firstCamera);
+
         unsafe { rectOutlineCol = *ImGui.GetStyleColorVec4(ImGuiCol.Border); }
     }
 
     public override void Update()
     {
-        Reload();
-
-        base.Update();
-    }
-
-    private void Reload()
-    {
-        if (needsResize)
+        if (needsResize && _scene.ActiveCamera != null)
         {
-            _scene.Resize(currentCanvasSize);
+            // Make sure canvas size never reaches 0
+            if (currentCanvasSize.X < 20 || currentCanvasSize.Y < 20)
+            {
+                setWindowToMinimumSize = true;
+                currentCanvasSize = Vector2.One * 20;
+            }
+
+            _scene.ActiveCamera.Resize(currentCanvasSize);
             needsResize = false;
         }
 
         _scene.Render();
+
+        base.Update();
     }
 
     protected override void Draw()
     {
-        Begin();
+        if (setWindowToMinimumSize)
+        {
+            ImGui.SetNextWindowSize(Vector2.One * 20);
+            setWindowToMinimumSize = false;
+        }
+
+        if (!Begin()) return;
 
         Vector2 padding = ImGui.GetStyle().WindowPadding;
-        _sceneSize.X = ImGui.GetWindowSize().X * 2f / 3f;
-        float availY = ImGui.GetContentRegionAvail().Y;
+        float availX = float.Floor((ImGui.GetWindowSize().X * 2f / 3f) / 10f) * 10f;
+        float availY = float.Floor(ImGui.GetContentRegionAvail().Y / 20f) * 20f;
 
-        if (currentCanvasSize.X < _sceneSize.X || currentCanvasSize.X > _sceneSize.X || currentCanvasSize.Y < availY || currentCanvasSize.Y > availY)
+        if (currentCanvasSize.X < availX || currentCanvasSize.X > availX || currentCanvasSize.Y < availY || currentCanvasSize.Y > availY)
         {
-            currentCanvasSize = _sceneSize with { Y = availY };
+            currentCanvasSize = new Vector2(availX, availY);
             needsResize = true;
         }
 
         Vector2 viewMenuPos = ImGui.GetCursorPos();
-        viewMenuPos.X += _sceneSize.X - 32 - padding.X;
+        viewMenuPos.X += availX - 32 - padding.X;
         viewMenuPos.Y += padding.X;
 
-        GuiTexture texture = viewShadows ? _scene.ShadowRender : _scene.ObjectRender;
-        ImGui.Image(texture.Index, texture.Size, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+        Vector2 renderPos = ImGui.GetCursorScreenPos();
 
-        ImGui.SameLine();
-        Vector2 oldPos = ImGui.GetCursorPos();
-        ImGui.SetCursorPos(viewMenuPos);
-
-        // Draw view switcher
-        texture = viewShadows ?  _scene.ObjectRender : _scene.ShadowRender;
-        ImGui.Image(texture.Index, Vector2.One * 32, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
-        if (ImGui.IsItemClicked()) viewShadows = !viewShadows;
-        if (ImGui.IsItemHovered() && ImGui.BeginItemTooltip())
+        if (_scene.ActiveCamera != null)
         {
-            ImGui.Text("Click to switch between shadows and render");
-            ImGui.EndTooltip();
-        }
+            GuiTexture texture = viewStencil switch
+            {
+                0 => _scene.ActiveCamera.ColorPass.RenderTexture,
+                1 => _scene.ActiveCamera.LightingPass.RenderTexture,
+                2 => _scene.ActiveCamera.RemovalPass.RenderTexture,
+                _ => GuiManager.MissingTex
+            };
 
-        ImGui.SetCursorPos(oldPos);
+            ImGui.Image(texture.Index, _scene.ActiveCamera.ColorPass.RenderTexture.Size, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+
+            if (_inspectingEditable != null && _inspectingObject != null)
+            {
+                _inspectingEditable?.RenderSceneRepresentation(ImGui.GetWindowDrawList(), renderPos with
+                {
+                    X = renderPos.X + _inspectingObject.Position.X + _inspectingObject.Size.X / 2,
+                    Y = renderPos.Y + _inspectingObject.Position.Y + _inspectingObject.Size.Y / 2
+                });
+            }
+
+            ImGui.SameLine();
+            Vector2 oldPos = ImGui.GetCursorPos();
+            ImGui.SetCursorPos(viewMenuPos);
+
+            // Draw view switcher
+            texture = viewStencil switch
+            {
+                0 => _scene.ActiveCamera.LightingPass.RenderTexture,
+                1 => _scene.ActiveCamera.RemovalPass.RenderTexture,
+                2 => _scene.ActiveCamera.ColorPass.RenderTexture,
+                _ => GuiManager.MissingTex
+            };
+
+            ImGui.Image(texture.Index, Vector2.One * 32, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+
+            if (ImGui.IsItemClicked()) viewStencil = (viewStencil + 1) % 3;
+
+            if (ImGui.IsItemHovered() && ImGui.BeginItemTooltip())
+            {
+                ImGui.Text("Click to switch between shadows and render");
+                ImGui.EndTooltip();
+            }
+
+            ImGui.SetCursorPos(oldPos);
+        }
+        else
+        {
+            ImGui.SameLine();
+        }
 
         availY = ImGui.GetContentRegionAvail().Y / 2;
         Vector2 finalChildPos = ImGui.GetCursorPos();
@@ -94,6 +141,8 @@ public class SceneBuilder : Window
 
             foreach (SceneObject sceneObject in _scene.Objects)
             {
+                sceneObject.Update();
+
                 if (!Utils.SelectableTreeNode(sceneObject.NameInScene)) continue;
                 SetActiveInspect(sceneObject);
             }
@@ -106,8 +155,8 @@ public class SceneBuilder : Window
         {
             if (_inspecting != null)
             {
-                ImGui.SeparatorText(_inspectingObject == null ? _scene.Name : _inspectingObject.NameInScene);
-                _inspecting?.RenderInspector();
+                ImGui.SeparatorText(_inspectingObject == null ? "Scene" : _inspectingObject.NameInScene);
+                _inspecting.RenderInspector();
             }
 
             if (_inspectingObject != null)
@@ -138,8 +187,9 @@ public class SceneBuilder : Window
     private void SetActiveInspect(object inspectable)
     {
         _inspecting = inspectable as IInspectable; // automatically null if not inspectable
-        _inspectingObject = inspectable as SceneObject; // automatically null if not S.O.
         _inspectingRenderable = inspectable as IRenderable; // automatically null if not renderable
+        _inspectingEditable = inspectable as ISceneEditable; // automatically null if not editable
+        _inspectingObject = inspectable as SceneObject; // automatically null if not S.O.
     }
 
     private void IncreaseObjectPriority()

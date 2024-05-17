@@ -33,25 +33,13 @@ public abstract class Window : IDisposable
 
     protected abstract void Destroy();
 
-    protected void Begin()
-    {
-        ImGui.Begin(DisplayName, ref open);
-    }
+    protected bool Begin() => ImGui.Begin(DisplayName, ref open);
 
-    protected void Begin(ImGuiWindowFlags flags)
-    {
-        ImGui.Begin(DisplayName, ref open, flags);
-    }
+    protected bool Begin(ImGuiWindowFlags flags) => ImGui.Begin(DisplayName, ref open, flags);
 
-    protected void BeginNoClose()
-    {
-        ImGui.Begin(DisplayName);
-    }
+    protected bool BeginNoClose() => ImGui.Begin(DisplayName);
 
-    protected void BeginNoClose(ImGuiWindowFlags flags)
-    {
-        ImGui.Begin(DisplayName, flags);
-    }
+    protected bool BeginNoClose(ImGuiWindowFlags flags) => ImGui.Begin(DisplayName, flags);
 
 
     public void Dispose()
