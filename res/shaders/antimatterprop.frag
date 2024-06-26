@@ -1,21 +1,37 @@
 #version 450
 
-layout(set = 0, binding = 0, std140) uniform CameraInfo
+layout(set = 0, binding = 0, std140) uniform CameraData
 {
     mat4 transform;
+} camera;
+
+layout(set = 0, binding = 1, std140) uniform PassData
+{
+    uint idx;
+    vec2 size;
+} pass;
+
+layout(set = 0, binding = 2, std140) uniform LightData
+{
     mat4 lightTransform;
+    mat4 biasTransform;
+    float shadowBias;
+    float pRain;
+} lighting;
 
-    float stcId; // current stencil id
-    vec2 cameraSize; // current stencil size
-
+layout(set = 0, binding = 3, std140) uniform PaletteData
+{
     vec2 effectColorsSize;
     uint effectA;
     uint effectB;
+} palette;
 
-    float pRain;
-} s;
+layout(set = 0, binding = 4, std140) uniform MeshData
+{
+    mat4 transform;
+} mesh;
 
-layout(set = 0, binding = 1, std140) uniform RenderData
+layout(set = 0, binding = 5, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;

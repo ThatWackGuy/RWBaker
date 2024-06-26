@@ -19,6 +19,11 @@ public enum CameraBgState
 
 public class Camera : SceneObject, IInspectable, IDisposable
 {
+    // Used in calculating camera position
+    // More distance -> Less precision
+    private const int NEAR_PLANE_DIVISOR = 5;
+    private const int NEAR_PLANE_DISTANCE = 100;
+
     public float SunAzimuth;
     public float SunAltitude;
     private Vector3 sunPosition;
@@ -26,6 +31,8 @@ public class Camera : SceneObject, IInspectable, IDisposable
     public float ShadowBias = 0.0003f;
 
     public float StaticDepth = 5;
+
+    public float CameraDistance => NEAR_PLANE_DIVISOR * NEAR_PLANE_DISTANCE - StaticDepth;
 
     public uint Width => (uint)Size.X;
     public uint Height => (uint)Size.Y;
@@ -49,6 +56,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
     private readonly DeviceBuffer _camBuffer;
     private readonly DeviceBuffer _lightingBuffer;
     private readonly DeviceBuffer _passBuffer;
+    private readonly DeviceBuffer _meshBuffer;
 
     private DeviceBuffer _objectBuffer;
 
@@ -60,11 +68,12 @@ public class Camera : SceneObject, IInspectable, IDisposable
     public bool Unlit;
     public float RainPercentage;
 
-    public bool WaitingForRecreate = true;
+    public bool WaitingForCameraRecreate = true;
+    public bool WaitingForLightingRecreate = true;
 
     public Camera(Scene owner) : base(owner, "Camera")
     {
-        Size = Vector2.One;
+        Size = Vector3.One;
 
         SunAzimuth = 0;
         SunAltitude = 0;
@@ -92,6 +101,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
         _passBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         _lightingBuffer = factory.CreateBuffer(new BufferDescription(144, BufferUsage.UniformBuffer));
 
+        _meshBuffer = factory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
         _objectBuffer = factory.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         _infoResourceSet = factory.CreateResourceSet(
             new ResourceSetDescription(
@@ -100,8 +110,8 @@ public class Camera : SceneObject, IInspectable, IDisposable
                 _passBuffer,
                 _lightingBuffer,
                 Scene.PaletteManager.PaletteInfo,
-                _objectBuffer,
-                GuiManager.GraphicsDevice.PointSampler
+                _meshBuffer,
+                _objectBuffer
             )
         );
     }
@@ -110,9 +120,9 @@ public class Camera : SceneObject, IInspectable, IDisposable
     {
         ImGui.TextDisabled($"id: {Id}");
 
-        if (ImGui.SliderFloat("Play Layer", ref StaticDepth, 0f, 30f)) WaitingForRecreate = true;
+        if (ImGui.SliderFloat("Play Layer", ref StaticDepth, 0f, 30f)) WaitingForCameraRecreate = true;
 
-        ImGui.SliderFloat("Rain Percentage", ref RainPercentage, 0, 1);
+        if (ImGui.SliderFloat("Rain Percentage", ref RainPercentage, 0, 1)) WaitingForLightingRecreate = true;
 
         ImGui.Checkbox("Unlit", ref Unlit);
 
@@ -151,16 +161,16 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
         ImGui.SeparatorText("SUN SETTINGS");
 
-        if (ImGui.SliderAngle("Sun Azimuth", ref SunAzimuth)) WaitingForRecreate = true;
-        if (ImGui.SliderAngle("Sun Altitude", ref SunAltitude)) WaitingForRecreate = true;
-        if (ImGui.DragFloat("Shadow Bias", ref ShadowBias, 0.000001f, 0f, 0.0001f)) WaitingForRecreate = true;
+        if (ImGui.SliderAngle("Sun Azimuth", ref SunAzimuth, -90, 90)) WaitingForLightingRecreate = true;
+        if (ImGui.SliderAngle("Sun Altitude", ref SunAltitude, -90, 90)) WaitingForLightingRecreate = true;
+        if (ImGui.DragFloat("Shadow Bias", ref ShadowBias, 0.000001f, 0f, 0.0001f)) WaitingForLightingRecreate = true;
 
         ImGui.Text($"Sun at: {sunPosition.ToString()}");
 
         ImGui.SeparatorText("PROJECTOR SETTINGS");
 
-        if (ImGui.SliderFloat("##projectorx", ref ProjectorOffset.X, -500, 500)) WaitingForRecreate = true;
-        if (ImGui.SliderFloat("##projectory", ref ProjectorOffset.Y, -500, 500)) WaitingForRecreate = true;
+        if (ImGui.SliderFloat("##projectorx", ref ProjectorOffset.X, -500, 500)) WaitingForCameraRecreate = true;
+        if (ImGui.SliderFloat("##projectory", ref ProjectorOffset.Y, -500, 500)) WaitingForCameraRecreate = true;
 
         ImGui.Separator();
 
@@ -183,7 +193,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
         BackgroundColor = state switch
         {
             CameraBgState.Clear => RgbaFloat.Clear,
-            CameraBgState.Sky => Scene.PaletteManager.CurrentPalette.Image[0, 0].MixRGB(Scene.PaletteManager.CurrentPalette.Image[0, 8], RainPercentage).ToRgbaFloat(), // Mix rain sky based on percentage
+            CameraBgState.Sky => ImageUtils.MixRgbaFloat(Scene.PaletteManager.CurrentPalette.CameraSky, Scene.PaletteManager.CurrentPalette.CameraSkyRain, RainPercentage), // Mix rain sky based on percentage
             CameraBgState.White => RgbaFloat.White,
             CameraBgState.Custom => BackgroundColor,
             _ => throw new ArgumentOutOfRangeException(nameof(state))
@@ -192,49 +202,31 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
     public void Resize(Vector2 size)
     {
-        Size = size;
+        Size = new Vector3(size, 1);
 
         Recreate();
     }
 
     public void Resize(IRenderable renderable)
     {
-        Size = (Vector2)renderable.GetRenderSize(this);
+        Size = new Vector3((Vector2)renderable.GetRenderSize(this), 1);
 
         Recreate();
     }
 
-    private void CalculateLightPosition(float cameraDistance)
+    private void LightRecreate()
     {
+        GraphicsDevice graphicsDevice = GuiManager.GraphicsDevice;
+
+        float cameraDistance = CameraDistance;
+
         float azimuth = SunAzimuth - 1.5707964F; // azimuth - 90deg
         sunPosition.X = cameraDistance * float.Cos(SunAltitude) * float.Cos(azimuth);
         sunPosition.Y = cameraDistance * float.Sin(SunAltitude);
         sunPosition.Z = cameraDistance * float.Cos(SunAltitude) * float.Sin(azimuth);
-    }
 
-    private void Recreate()
-    {
-        GraphicsDevice graphicsDevice = GuiManager.GraphicsDevice;
-
-        // dispose completely halts graphics if we don't wait
-        graphicsDevice.WaitForIdle();
-
-        // Get rid of old resources
-        ColorPass.Dispose();
         LightingPass.Dispose();
-        RemovalPass.Dispose();
-
-        // Framebuffers
-        RemovalPass = new RenderPass(graphicsDevice.ResourceFactory, $"removal{Id}", BlendStateDescription.SingleAlphaBlend, Width, Height);
         LightingPass = new RenderPass(graphicsDevice.ResourceFactory, $"lighting{Id}", BlendStateDescription.SingleAlphaBlend, 4096, 4096);
-        ColorPass = new RenderPass(graphicsDevice.ResourceFactory, $"color{Id}", BlendStateDescription.SingleAlphaBlend, Width, Height);
-
-        const float nearDivisor = 5;
-        float height = Size.Y / nearDivisor;
-        float width = height * (Size.X / Size.Y);
-        float cameraDistance = nearDivisor * 100 - StaticDepth;
-
-        CalculateLightPosition(cameraDistance);
 
         LightingProjectionView = Matrix4x4.CreateLookAt(
             sunPosition * 5,
@@ -249,13 +241,35 @@ public class Camera : SceneObject, IInspectable, IDisposable
             5000
         );
 
+        GuiManager.GraphicsDevice.UpdateBuffer(_lightingBuffer, 0, new LightingUniform(this));
+
+        WaitingForLightingRecreate = false;
+    }
+
+    private void Recreate()
+    {
+        GraphicsDevice graphicsDevice = GuiManager.GraphicsDevice;
+
+        // dispose completely halts graphics if we don't wait
+        graphicsDevice.WaitForIdle();
+
+        // Get rid of old resources
+        ColorPass.Dispose();
+        RemovalPass.Dispose();
+
+        // Framebuffers
+        RemovalPass = new RenderPass(graphicsDevice.ResourceFactory, $"removal{Id}", BlendStateDescription.SingleAlphaBlend, Width, Height);
+        ColorPass = new RenderPass(graphicsDevice.ResourceFactory, $"color{Id}", BlendStateDescription.SingleAlphaBlend, Width, Height);
+
+        float cameraDistance = CameraDistance;
+
         ProjectionView = Matrix4x4.CreateLookAt(
             -Vector3.UnitZ * cameraDistance,
             Vector3.Zero,
             Vector3.UnitY
         ) * Utils.CreatePerspectiveOffsetProjection(
-            width,
-            height,
+            Size.X / NEAR_PLANE_DIVISOR,
+            Size.Y / NEAR_PLANE_DIVISOR,
             100,
             float.PositiveInfinity,
             ProjectorOffset.X,
@@ -264,14 +278,14 @@ public class Camera : SceneObject, IInspectable, IDisposable
         );
 
         GuiManager.GraphicsDevice.UpdateBuffer(_camBuffer, 0, new CameraUniform(this));
-        GuiManager.GraphicsDevice.UpdateBuffer(_lightingBuffer, 0, new LightingUniform(this));
 
-        WaitingForRecreate = false;
+        WaitingForCameraRecreate = false;
     }
 
     public void Render(IEnumerable<RenderDescription> activeRenderData)
     {
-        if (WaitingForRecreate) Recreate();
+        if (WaitingForCameraRecreate) Recreate();
+        if (WaitingForLightingRecreate) LightRecreate();
 
         CommandList commandList = Scene.CommandList;
 
@@ -292,37 +306,40 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
         foreach (RenderDescription desc in activeRenderData)
         {
-            // Resize vertices if desc is bigger
-            if (desc.Vertices.Length * 36 > _vtxBuffer.SizeInBytes)
+            // Resize vertices if mesh is bigger
+            if (desc.LockedVertices.Length * 36 > _vtxBuffer.SizeInBytes)
             {
                 _vtxBuffer.Dispose();
                 _vtxBuffer = GuiManager.ResourceFactory.CreateBuffer(
                     new BufferDescription(
-                        (uint)desc.Vertices.Length * 36,
+                        (uint)desc.LockedVertices.Length * 36,
                         BufferUsage.VertexBuffer
                     )
                 );
             }
 
-            // Resize indices if desc is bigger
-            if (desc.Indices.Length * 4 > _idxBuffer.SizeInBytes)
+            // Resize indices if mesh is bigger
+            if (desc.LockedIndices.Length * 4 > _idxBuffer.SizeInBytes)
             {
                 _idxBuffer.Dispose();
                 _idxBuffer = GuiManager.ResourceFactory.CreateBuffer(
                     new BufferDescription(
-                        (uint)desc.Indices.Length * 4,
+                        (uint)desc.LockedIndices.Length * 4,
                         BufferUsage.IndexBuffer
                     )
                 );
             }
 
+            commandList.UpdateBuffer(_vtxBuffer, 0, desc.LockedVertices);
+            commandList.UpdateBuffer(_idxBuffer, 0, desc.LockedIndices);
+
             // Resize uniform buffer if desc is bigger
-            if (desc.ObjectSizeInBytes > _objectBuffer.SizeInBytes)
+            if (desc.UniformSizeInBytes > _objectBuffer.SizeInBytes)
             {
                 _objectBuffer.Dispose();
                 _objectBuffer = GuiManager.GraphicsDevice.ResourceFactory.CreateBuffer(
                     new BufferDescription(
-                        desc.ObjectSizeForBuffer,
+                        desc.UniformSizeForBuffer,
                         BufferUsage.UniformBuffer
                     )
                 );
@@ -336,19 +353,17 @@ public class Camera : SceneObject, IInspectable, IDisposable
                         _passBuffer,
                         _lightingBuffer,
                         Scene.PaletteManager.PaletteInfo,
-                        _objectBuffer,
-                        GuiManager.GraphicsDevice.PointSampler
+                        _meshBuffer,
+                        _objectBuffer
                     )
                 );
             }
 
-            commandList.UpdateBuffer(_vtxBuffer, 0, desc.Vertices);
-            commandList.UpdateBuffer(_idxBuffer, 0, desc.Indices);
-
             commandList.SetVertexBuffer(0, _vtxBuffer);
             commandList.SetIndexBuffer(_idxBuffer, IndexFormat.UInt16);
 
-            commandList.UpdateBuffer(_objectBuffer, 0, desc.ObjectData, (uint)desc.ObjectSizeInBytes);
+            commandList.UpdateBuffer(_meshBuffer, 0, desc.MeshMatrix);
+            commandList.UpdateBuffer(_objectBuffer, 0, desc.UniformPtr, (uint)desc.UniformSizeInBytes);
 
             int passCounter = 0;
 
@@ -372,7 +387,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
     private void DrawPass(CommandList commandList, RenderDescription desc, int id, RenderPass pass, bool clear = false)
     {
-        commandList.SetPipeline(EnsurePipelineForPass(GuiManager.ResourceFactory, desc.Id, pass, desc.Shaders, desc.Layouts));
+        commandList.SetPipeline(EnsurePipelineForPass(pass, desc.Shaders, desc.Layouts));
         commandList.SetGraphicsResourceSet(0, _infoResourceSet);
 
         commandList.SetFramebuffer(pass.Framebuffer);
@@ -387,7 +402,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
         if (desc.TextureSet != null) commandList.SetGraphicsResourceSet(1, desc.TextureSet);
 
-        commandList.DrawIndexed((uint)desc.Indices.Length, 1, 0, 0, 0);
+        commandList.DrawIndexed((uint)desc.LockedIndices.Length, 1, 0, 0, 0);
     }
 
     public void SaveToFile(string path)
@@ -428,11 +443,11 @@ public class Camera : SceneObject, IInspectable, IDisposable
         }
     }
 
-    public Pipeline EnsurePipelineForPass(ResourceFactory factory, string objectId, RenderPass pass, Shader[] shaders, ResourceLayout[] layouts)
+    public Pipeline EnsurePipelineForPass(RenderPass pass, Shader[] shaders, ResourceLayout[] layouts)
     {
-        if (_pipelineCache.TryGetValue(objectId + pass.Id, out Pipeline pipeline)) return pipeline;
+        if (_pipelineCache.TryGetValue(pass.Id, out Pipeline? pipeline)) return pipeline;
 
-        pipeline = factory.CreateGraphicsPipeline(
+        pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
                 pass.BlendStateDescription,
                 new DepthStencilStateDescription(true, true, ComparisonKind.Less),
@@ -444,7 +459,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
             )
         );
 
-        _pipelineCache.Add(objectId + pass.Id, pipeline);
+        _pipelineCache.Add(pass.Id, pipeline);
 
         return pipeline;
     }

@@ -63,8 +63,8 @@ public static class RWUtils
                 new ResourceLayoutElementDescription("StencilData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("LightingData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
                 new ResourceLayoutElementDescription("PaletteData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("ObjectData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("Sampler", ResourceKind.Sampler, ShaderStages.Fragment)
+                new ResourceLayoutElementDescription("MeshData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("ObjectData", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment)
             )
         );
 

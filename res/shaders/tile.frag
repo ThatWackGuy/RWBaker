@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_debug_printf : enable
 
 layout(set = 0, binding = 0, std140) uniform CameraData
 {
@@ -26,7 +27,12 @@ layout(set = 0, binding = 3, std140) uniform PaletteData
     uint effectB;
 } palette;
 
-layout(set = 0, binding = 4, std140) uniform RenderData
+layout(set = 0, binding = 4, std140) uniform MeshData
+{
+    mat4 transform;
+} mesh;
+
+layout(set = 0, binding = 5, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;
@@ -51,13 +57,61 @@ layout(location = 3) in flat int f_localZ;
 
 layout(location = 0) out vec4 out_color;
 
-bool inShadow()
+int inShadow()
 {
     vec4 shadowCoords = f_shCoord / f_shCoord.w;
     shadowCoords = shadowCoords * 0.5 + 0.5;
     shadowCoords.y = 1 - shadowCoords.y;
 
-    return f_shCoord.z > texture(sTex, shadowCoords.xy).r + lighting.shadowBias;
+    return int(f_shCoord.z > texture(sTex, shadowCoords.xy).r + lighting.shadowBias);
+}
+
+vec4 shadePixel(vec4 cPix, float depth, int shadow)
+{
+    // Check if pixel is unlit
+    float paletteOffset = 2 + shadow * 3;
+    float effectOffset = shadow;
+
+    // Palette colors
+    const vec2 pSize = vec2(32.0, 16.0);
+    float palX = clamp(depth, 0, 31);
+    vec4 pH    =     mix( texture(pTex, vec2(palX, paletteOffset    ) / pSize), texture(pTex, vec2(palX, paletteOffset + 8 ) / pSize), lighting.pRain );   // Highlights
+    vec4 pB    =     mix( texture(pTex, vec2(palX, paletteOffset + 1) / pSize), texture(pTex, vec2(palX, paletteOffset + 9 ) / pSize), lighting.pRain );   // Base
+    vec4 pS    =     mix( texture(pTex, vec2(palX, paletteOffset + 2) / pSize), texture(pTex, vec2(palX, paletteOffset + 10) / pSize), lighting.pRain );   // Shadows
+    vec4 pF    =     mix( texture(pTex, vec2(1,    paletteOffset - 2) / pSize), texture(pTex, vec2(1,    paletteOffset     ) / pSize), lighting.pRain );   // Fog
+    float pFI  =     mix( texture(pTex, vec2(9,    paletteOffset - 2) / pSize), texture(pTex, vec2(9,    paletteOffset     ) / pSize), lighting.pRain ).r; // Fog Intensity
+
+    // Red is Shadows
+    if (cPix.r == 1)
+    {
+        // Purple is Effect A
+        if (cPix.b == 1)
+        {
+            float intensity = texture(tex, vec2(tile.vars * 20 * ((2 * tile.bfTiles) + tile.tileSize.x) + f_texCoord.x, f_texCoord.y) / tile.texSize).r;
+
+            vec4 fA = texture(eTex, vec2(palette.effectA * 2 + (depth == 0 ? 0 : 1), effectOffset) / palette.effectColorsSize);
+            return mix(pB, fA, 1 - intensity);
+        }
+
+        return mix(pS, pF, depth < 10 ? 0 : pFI);
+    }
+    // Blue is Highlights
+    else if (cPix.b == 1)
+    {
+        // Cyan is Effect B
+        if (cPix.g == 1)
+        {
+            float intensity = texture(tex, vec2(tile.vars * 20 * ((2 * tile.bfTiles) + tile.tileSize.x) + f_texCoord.x, f_texCoord.y) / tile.texSize).r;
+
+            vec4 fB = texture(eTex, vec2(palette.effectB * 2 + (depth == 0 ? 0 : 1), effectOffset) / palette.effectColorsSize);
+            return mix(pB, fB, 1 - intensity);
+        }
+
+        return mix(pH, pF, depth < 10 ? 0 : pFI);
+    }
+
+    // Everything else is Base
+    return mix(pB, pF, depth < 10 ? 0 : pFI);
 }
 
 void main()
@@ -99,17 +153,17 @@ void main()
         // HORIZONTAL
         else
         {
-            float pieceIdx = floor((f_texCoord.x - bounds) / 20);
+            float pieceIdx = floor(bPos.x / 20);
 
             // Top
             if (bPos.y < 5)
             {
-                pxCoord = vec2(mod(f_texCoord.x - bounds, 20), pieceIdx * tileSize.y + f_localZ);
+                pxCoord = vec2(mod(bPos.x, 20), pieceIdx * tileSize.y + f_localZ);
             }
             // Bottom
             else if (bPos.y > tileSize.y - 5)
             {
-                pxCoord = vec2(mod(f_texCoord.x - bounds, 20), pieceIdx * tileSize.y + f_localZ);
+                pxCoord = vec2(mod(bPos.x, 20), pieceIdx * tileSize.y + f_localZ);
             }
         }
 
@@ -139,59 +193,5 @@ void main()
         return;
     }
 
-    // Check if pixel is unlit
-    float paletteOffset = 2;
-    float effectOffset = 0;
-    if (inShadow())
-    {
-        paletteOffset += 3;
-        effectOffset += 1;
-    }
-
-    // Palette colors
-    vec2 pSize = vec2(32.0, 16.0);
-    float palX = f_layer;
-    vec4 pH    =     mix( texture(pTex, vec2(palX, paletteOffset    ) / pSize), texture(pTex, vec2(palX, paletteOffset + 8 ) / pSize), lighting.pRain );   // Highlights
-    vec4 pB    =     mix( texture(pTex, vec2(palX, paletteOffset + 1) / pSize), texture(pTex, vec2(palX, paletteOffset + 9 ) / pSize), lighting.pRain );   // Base
-    vec4 pS    =     mix( texture(pTex, vec2(palX, paletteOffset + 2) / pSize), texture(pTex, vec2(palX, paletteOffset + 10) / pSize), lighting.pRain );   // Shadows
-    vec4 pF    =     mix( texture(pTex, vec2(1,    paletteOffset - 2) / pSize), texture(pTex, vec2(1,    paletteOffset     ) / pSize), lighting.pRain );   // Fog
-    float pFI  = 1 - mix( texture(pTex, vec2(9,    paletteOffset - 2) / pSize), texture(pTex, vec2(9,    paletteOffset     ) / pSize), lighting.pRain ).r; // Fog Intensity
-
-    // Red is Shadows
-    if (cPix.r == 1)
-    {
-        // Purple is Effect A
-        if (cPix.b == 1)
-        {
-            float intensity = texture(tex, vec2(tile.vars * 20 * ((2 * tile.bfTiles) + tile.tileSize.x) + f_texCoord.x, f_texCoord.y) / tile.texSize).r;
-
-            vec4 fA = texture(eTex, vec2(palette.effectA * 2 + (f_layer == 0 ? 0 : 1), effectOffset) / palette.effectColorsSize);
-            out_color = mix(pB, fA, 1 - intensity);
-
-            return;
-        }
-
-        out_color = mix(pS, pF, f_layer < 10 ? 0 : pFI);
-        return;
-    }
-    // Blue is Highlights
-    else if (cPix.b == 1)
-    {
-        // Cyan is Effect B
-        if (cPix.g == 1)
-        {
-            float intensity = texture(tex, vec2(tile.vars * 20 * ((2 * tile.bfTiles) + tile.tileSize.x) + f_texCoord.x, f_texCoord.y) / tile.texSize).r;
-
-            vec4 fB = texture(eTex, vec2(palette.effectB * 2 + (f_layer == 0 ? 0 : 1), effectOffset) / palette.effectColorsSize);
-            out_color = mix(pB, fB, 1 - intensity);
-
-            return;
-        }
-
-        out_color = mix(pH, pF, f_layer < 10 ? 0 : pFI);
-        return;
-    }
-
-    // Everything else is Base
-    out_color = mix(pB, pF, f_layer < 10 ? 0 : pFI);
+    out_color = shadePixel(cPix, f_layer, inShadow());
 }

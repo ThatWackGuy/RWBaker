@@ -113,13 +113,13 @@ public class SceneBuilder : Window
                 _ => GuiManager.MissingTex
             };
 
-            ImGui.Image(texture.Index, Vector2.One * 32, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
+            ImGui.Image(texture.Index, Vector2.Normalize(texture.Size) * 32, Vector2.Zero, Vector2.One, Vector4.One, rectOutlineCol);
 
             if (ImGui.IsItemClicked()) viewStencil = (viewStencil + 1) % 3;
 
             if (ImGui.IsItemHovered() && ImGui.BeginItemTooltip())
             {
-                ImGui.Text("Click to switch between shadows and render");
+                ImGui.Text("Click to switch between views.");
                 ImGui.EndTooltip();
             }
 
@@ -167,7 +167,7 @@ public class SceneBuilder : Window
 
                 if (ImGui.Button("Move Down In Hierarchy")) DecreaseObjectPriority();
 
-                if (ImGui.Button("Remove"))
+                if (_inspectingObject is not Camera && ImGui.Button("Remove"))
                 {
                     _inspecting = _scene;
                     _scene.RemoveObject(_inspectingObject);

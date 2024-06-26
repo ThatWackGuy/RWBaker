@@ -1,5 +1,7 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
@@ -14,6 +16,7 @@ public class GuiTexture : IDisposable
 {
     private static readonly ConcurrentDictionary<IntPtr, GuiTexture> _mapByIdx = new();
     private static readonly ConcurrentDictionary<string, GuiTexture> _mapByName = new();
+
     private static IntPtr _nextIndex = 1;
 
     public readonly string Name;
@@ -165,6 +168,17 @@ public class GuiTexture : IDisposable
         return Create(name, texture, textureLayout);
     }
 
+    /// <summary>
+    /// Fetches all registered textures as a <see cref="ReadOnlySequence{T}"/>
+    /// </summary>
+    /// <remarks>
+    /// Not recommended for general use. Please use <see cref="TryGetTexture(System.IntPtr,out RWBaker.Gui.GuiTexture)"/> or similar.
+    /// </remarks>
+    public static ImmutableArray<GuiTexture> GetAllTextures()
+    {
+        return _mapByIdx.Values.ToImmutableArray();
+    }
+
     public static GuiTexture GetTextureSafe(IntPtr index)
     {
         return _mapByIdx.TryGetValue(index, out GuiTexture? texture) ? texture : GuiManager.MissingTex;
@@ -183,32 +197,73 @@ public class GuiTexture : IDisposable
     public static bool TextureExists(IntPtr index) => _mapByIdx.ContainsKey(index);
     public static bool TextureExists(string name) => _mapByName.ContainsKey(name);
 
-    public Image<Rgba32> ToImage()
+    public Texture ToStaging(CommandList commandList)
     {
-        if (Texture.Format != PixelFormat.R8_G8_B8_A8_UNorm) throw new ArgumentException("Texture must use R8_G8_B8_A8_UNorm format!");
-        if ((Texture.Usage & TextureUsage.Staging) == 0) throw new ArgumentException("Only staging textures may be converted to images!");
+        GraphicsDevice graphics = GuiManager.GraphicsDevice;
+        ResourceFactory factory = GuiManager.ResourceFactory;
+
+        // Copy the color render target into a staging texture
+        Texture stagingTex = factory.CreateTexture(
+            new TextureDescription(
+                Texture.Width,
+                Texture.Height,
+                Texture.Depth,
+                Texture.MipLevels,
+                Texture.ArrayLayers,
+                Texture.Format,
+                TextureUsage.Staging,
+                Texture.Type
+            )
+        );
+        using Fence fence = factory.CreateFence(false);
+
+        commandList.Begin();
+        commandList.CopyTexture(Texture, stagingTex);
+        commandList.End();
+        graphics.SubmitCommands(commandList, fence);
+        graphics.WaitForFence(fence);
+
+        return stagingTex;
+    }
+
+    public Image<Rgba32> ToImage(bool force = false)
+    {
+        bool usingTempStaging = false;
+        Texture texture = Texture;
+
+        if (texture.Format != PixelFormat.R8_G8_B8_A8_UNorm) throw new ArgumentException("Texture must use R8_G8_B8_A8_UNorm format!");
+        if ((texture.Usage & TextureUsage.Staging) == 0)
+        {
+            if (!force) throw new ArgumentException("Only staging textures may be converted to images!");
+
+            texture = ToStaging(GuiManager.CommandList);
+            usingTempStaging = true;
+        }
 
         GraphicsDevice graphics = GuiManager.GraphicsDevice;
 
-        MappedResource map = graphics.Map(Texture, MapMode.Read);
+        MappedResource map = graphics.Map(texture, MapMode.Read);
 
         unsafe
         {
             byte* src = (byte*)map.Data;
-            byte[] dst = new byte[Texture.Width * Texture.Height * sizeof(Rgba32)];
+            byte[] dst = new byte[texture.Width * texture.Height * sizeof(Rgba32)];
             byte* end = src + map.SizeInBytes;
 
             int y = 0;
             while (src < end)
             {
-                Marshal.Copy((IntPtr)src, dst, y * (int)Texture.Width * 4, (int)Texture.Width * 4);
+                Marshal.Copy((IntPtr)src, dst, y * (int)texture.Width * 4, (int)texture.Width * 4);
                 src += map.RowPitch;
                 y++;
             }
 
-            graphics.Unmap(Texture);
+            graphics.Unmap(texture);
 
-            return Image.LoadPixelData<Rgba32>(dst, (int)Texture.Width, (int)Texture.Height);
+            Image<Rgba32> ret = Image.LoadPixelData<Rgba32>(dst, (int)texture.Width, (int)texture.Height);
+            if (usingTempStaging) texture.Dispose();
+
+            return ret;
         }
     }
 

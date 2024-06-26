@@ -5,6 +5,9 @@ using System.Numerics;
 using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Rendering;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using Veldrid;
 
 namespace RWBaker.Tiles;
@@ -32,6 +35,8 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public readonly GuiTexture CachedTexture;
 
+    public readonly Mesh Mesh;
+
     // Default when there are no tiles
     public TileObject() : base(null!, "")
     {
@@ -51,6 +56,8 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         HasSpecs2 = false;
 
         CachedTexture = GuiManager.MissingTex;
+
+        Mesh = new Mesh();
     }
 
     public TileObject(Scene scene, RWObjectManager manager, TileInfo cache) : base(scene, cache.ProperName)
@@ -97,7 +104,9 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
         BufferTiles = cache.BufferTiles;
         OriginalSize = (Vector2)cache.Size;
-        Size = OriginalSize * 20 + Vector2.One * cache.BufferTiles * 40;
+        Size = new Vector3(OriginalSize * 20 + Vector2.One * cache.BufferTiles * 40, LayerCount);
+
+        Position = new Vector3(-Size.X / 2, -Size.Y / 2 ,0);
 
         Type = cache.Type;
 
@@ -107,10 +116,21 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
         if (!GuiTexture.TryGetTexture($"_tile{ProperName}", out CachedTexture!))
         {
-            CachedTexture = GuiTexture.Create($"_tile{ProperName}", GuiManager.TextureFromImage(texturePath));
+            using Image<Rgba32> image = Image.Load<Rgba32>(texturePath);
+
+            image.Mutate(ctx =>
+            {
+                ctx.FixFutileTexture((int)Size.X * Variants, (int)Size.Y * RepeatLayers.Length);
+                ctx.ReadyFutileTexture();
+            });
+
+            CachedTexture = GuiTexture.Create($"_tile{ProperName}", GuiManager.TextureFromImage(image));
         }
 
         CachedTexture.Use();
+
+        Mesh = new Mesh();
+        BuildLayerMesh();
     }
 
     public void RenderInspector()
@@ -120,73 +140,18 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         ImGui.DragFloat("X", ref Position.X, 20, 40);
         ImGui.DragFloat("Y", ref Position.Y, 20, 40);
 
-        int z = (int)Position.Z;
+        int z = (int)Position.Z / 10;
         ImGui.SliderInt("Layer", ref z, 0, 2);
-        Position.Z = z;
+        Position.Z = z * 10;
 
         if (Variants > 1)
         {
-            ImGui.SliderInt("Variant", ref _renderVariation, 0, Variants - 1);
+            if (ImGui.SliderInt("Variant", ref _renderVariation, 0, Variants - 1)) BuildLayerMesh();
         }
     }
 
     public RenderDescription GetRenderDescription(Camera camera)
     {
-        Vector3 pos = Position with { Z = Position.Z * 10 };
-        Vector2 centredSize = Size / 2;
-
-        var vertices = new RWVertexData[LayerCount * 4];
-        ushort[] indices = new ushort[LayerCount * 6];
-
-        int vertIndex = 0;
-        int indexIndex = 0;
-        int renderLayer = 0;
-        for (int imgLayer = 0; imgLayer < RepeatLayers.Length; imgLayer++)
-        {
-            if (RepeatLayers[imgLayer] == 0) continue;
-
-            // box tile texture pos is calculated in-shader so assignment here means nothing
-            Vector2 texPos = Type == TileType.Box ? Vector2.Zero : new Vector2(Size.X * RenderVariation, 1 + imgLayer * Size.Y);
-
-            for (int repeat = 0; repeat < RepeatLayers[imgLayer]; repeat++)
-            {
-                vertices[vertIndex] = new RWVertexData(
-                    pos + new Vector3(-centredSize.X, centredSize.Y, renderLayer),
-                    texPos,
-                    RgbaFloat.Clear
-                ); // Top Left
-
-                vertices[vertIndex + 1] = new RWVertexData(
-                    pos + new Vector3(centredSize.X, centredSize.Y, renderLayer),
-                    texPos with { X = texPos.X + Size.X },
-                    RgbaFloat.Clear
-                ); // Top Right
-
-                vertices[vertIndex + 2] = new RWVertexData(
-                    pos + new Vector3(centredSize.X, -centredSize.Y, renderLayer),
-                    texPos + Size,
-                    RgbaFloat.Clear
-                ); // Bottom Right
-
-                vertices[vertIndex + 3] = new RWVertexData(
-                    pos + new Vector3(-centredSize.X, -centredSize.Y, renderLayer),
-                    texPos with { Y = texPos.Y + Size.Y },
-                    RgbaFloat.Clear
-                ); // Bottom Left
-
-                // 0 1 2, 2 3 0 for each quad
-                indices[indexIndex++] = (ushort) vertIndex;      // 0
-                indices[indexIndex++] = (ushort)(vertIndex + 1); // 1
-                indices[indexIndex++] = (ushort)(vertIndex + 2); // 2
-                indices[indexIndex++] = (ushort)(vertIndex + 2); // 2
-                indices[indexIndex++] = (ushort)(vertIndex + 3); // 3
-                indices[indexIndex++] = (ushort) vertIndex;      // 0
-
-                vertIndex += 4;
-                renderLayer++;
-            }
-        }
-
         ResourceSet textureSet = GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,
@@ -198,10 +163,8 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
             )
         );
 
-        return new RenderDescription(
-            "tile",
-            vertices,
-            indices,
+        lock (Mesh) return new RenderDescription(
+            Mesh, Position, Matrix4x4.Identity,
             textureSet,
             new RWTileRenderUniform(this),
             false, true, true,
@@ -210,7 +173,82 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         );
     }
 
-    public Vector2Int GetRenderSize(Camera camera) => (Vector2Int)Size + (LayerCount - 1) * Vector2.One; // TODO: FIX
+    private void BuildLayerMesh()
+    {
+        Mesh.Clear();
+
+        /*if (File.Exists($"./cache/meshes/{ProperName} VAR{RenderVariation}"))
+        {
+            Mesh.MergeBytes(File.ReadAllBytes($"./cache/meshes/{ProperName} VAR{RenderVariation}"));
+            return;
+        }*/
+
+        Mesh.ReadyMerge(LayerCount * 4, LayerCount * 6, true);
+
+        int renderLayer = 0;
+        for (int imgLayer = 0; imgLayer < RepeatLayers.Length; imgLayer++)
+        {
+            if (RepeatLayers[imgLayer] == 0) continue;
+
+            // box tiles calculate texture coords in-shader
+            Vector2 texPos = Type == TileType.Box ? Vector2.Zero : new Vector2(Size.X * RenderVariation, 1 + imgLayer * Size.Y);
+
+            for (int repeat = 0; repeat < RepeatLayers[imgLayer]; repeat++)
+            {
+                Mesh.MergeQuad([
+                    new Vertex(
+                        new Vector3(0, Size.Y, renderLayer),
+                        texPos,
+                        RgbaFloat.Clear
+                    ), // Top Left
+
+                    new Vertex(
+                        new Vector3(Size.X, Size.Y, renderLayer),
+                        texPos with { X = texPos.X + Size.X },
+                        RgbaFloat.Clear
+                    ), // Top Right
+
+                    new Vertex(
+                        new Vector3(Size.X, 0, renderLayer),
+                        new Vector2(texPos.X + Size.X, texPos.Y + Size.Y),
+                        RgbaFloat.Clear
+                    ), // Bottom Right
+
+                    new Vertex(
+                        new Vector3(0, 0, renderLayer),
+                        texPos with { Y = texPos.Y + Size.Y },
+                        RgbaFloat.Clear
+                    ) // Bottom Left
+                ]);
+
+                renderLayer++;
+            }
+        }
+
+        Mesh.AllocatedMergeOver();
+
+        /*Image<Rgba32> image = CachedTexture.ToImage(true);
+
+        Parallel.For(0, RepeatLayers.Length, ly =>
+        {
+            Mesh extruded = image.ExtrudeEdgesAsMesh(new Rectangle(RenderVariation * (int)Size.X, 1 + ly * (int)Size.Y, (int)Size.X, (int)Size.Y), ly);
+
+            for (int repeated = 0; repeated < RepeatLayers[ly]; repeated++)
+            {
+                lock (Mesh) Mesh.MergeMesh(extruded, Vector3.UnitZ * repeated);
+            }
+        });
+
+        GuiManager.PushNotification(new ImNotify(ImNotifyType.Success, $"Successfully built mesh {ProperName} VAR{RenderVariation}"));*/
+
+        /*Directory.CreateDirectory("./cache/meshes");
+        using FileStream file = File.Create($"./cache/meshes/{ProperName} VAR{RenderVariation}");
+
+        lock (Mesh) file.Write(Mesh.AsBytes());
+        file.Close();*/
+    }
+
+    public Vector2Int GetRenderSize(Camera camera) => new Vector2Int((int)Size.X, (int)Size.Y) + (LayerCount - 1) * Vector2.One; // TODO: FIX
 
     public void Dispose()
     {

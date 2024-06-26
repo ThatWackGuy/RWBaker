@@ -23,6 +23,29 @@ public static class Utils
     public const uint IM_WHITE = 4294967295;
     public const uint IM_GRAY = 4286611584;
 
+    public static byte[] ToBytes(object obj, int size)
+    {
+        byte[] bytes = new byte[size];
+        IntPtr ptr = Marshal.AllocHGlobal(size);
+        Marshal.StructureToPtr(obj, ptr, false);
+        Marshal.Copy(ptr, bytes, 0, size);
+        Marshal.FreeHGlobal(ptr);
+
+        return bytes;
+    }
+
+    public static T FromBytes<T>(byte[] bytes)
+    {
+        IntPtr ptr = Marshal.AllocHGlobal(bytes.Length);
+        Marshal.Copy(bytes, 0, ptr, bytes.Length);
+        T? obj = (T?)Marshal.PtrToStructure(ptr, typeof(T));
+        Marshal.FreeHGlobal(ptr);
+
+        if (obj == null) throw new NullReferenceException("Deserialized object was null");
+
+        return obj;
+    }
+
     public static void ChangePriority<T>(this List<T> list, T obj, int move)
     {
         int index = list.IndexOf(obj);
@@ -132,25 +155,29 @@ public static class Utils
             ImGui.EndMenu();
         }
 
+        if (GuiManager.DebugMode && ImGui.BeginMenu("Debug"))
+        {
+            if (ImGui.MenuItem("Resource Viewer"))
+            {
+                GuiManager.AddWindow(new ResourceViewer());
+            }
+
+            ImGui.EndMenu();
+        }
+
         ImGui.EndMainMenuBar();
     }
 
-    public static void PushStyleColor(ImGuiCol id, int r, int g, int b)
+    public static unsafe void PushStyleColor(ImGuiCol id, int r, int g, int b)
     {
-        unsafe
-        {
-            float textAlpha = ImGui.GetStyleColorVec4(id)->W;
-            ImGui.PushStyleColor(id, new Vector4(r / 255f, g / 255f, b / 255f, textAlpha));
-        }
+        float textAlpha = ImGui.GetStyleColorVec4(id)->W;
+        ImGui.PushStyleColor(id, new Vector4(r / 255f, g / 255f, b / 255f, textAlpha));
     }
 
-    public static void PushStyleColor(ImGuiCol id, Vector3 col)
+    public static unsafe void PushStyleColor(ImGuiCol id, Vector3 col)
     {
-        unsafe
-        {
-            float textAlpha = ImGui.GetStyleColorVec4(id)->W;
-            ImGui.PushStyleColor(id, new Vector4(col / 255, textAlpha));
-        }
+        float textAlpha = ImGui.GetStyleColorVec4(id)->W;
+        ImGui.PushStyleColor(id, new Vector4(col / 255, textAlpha));
     }
 
     public static bool SelectableTreeNode(ReadOnlySpan<char> fmt)

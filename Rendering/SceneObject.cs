@@ -9,7 +9,7 @@ public abstract class SceneObject
     public string OriginalName;
     public string NameInScene;
     public Vector3 Position;
-    public Vector2 Size;
+    public Vector3 Size;
 
     public SceneObject(Scene owner, string name)
     {

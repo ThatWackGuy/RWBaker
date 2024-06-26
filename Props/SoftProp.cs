@@ -235,10 +235,8 @@ public class SoftProp : Prop
         objectManager
     );
 
-    private RenderDescription CompleteRenderDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture) => new(
-        "soft_prop",
-        vertices,
-        indices,
+    private RenderDescription CompleteRenderDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture) => new(
+        mesh, position, rotation,
         GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
                 RWUtils.RWObjectTextureLayout,

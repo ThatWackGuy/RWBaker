@@ -26,7 +26,12 @@ layout(set = 0, binding = 3, std140) uniform PaletteData
     uint effectB;
 } palette;
 
-layout(set = 0, binding = 4, std140) uniform RenderData
+layout(set = 0, binding = 4, std140) uniform MeshData
+{
+    mat4 transform;
+} mesh;
+
+layout(set = 0, binding = 5, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;
@@ -49,24 +54,23 @@ layout(location = 2) in vec4 v_color;
 
 layout(location = 0) out vec2 f_texCoord;
 layout(location = 1) out vec4 f_shCoord;
-layout(location = 2) out flat int f_layer;
-layout(location = 3) out float f_localZ;
+layout(location = 2) out float f_layer;
 
 void main()
 {
     vec4 pos4 = vec4(v_position, 1);
+    vec4 v_meshPos = mesh.transform * pos4;
 
     if (pass.idx == 0)
     {
-        gl_Position = lighting.lightTransform * pos4;
+        gl_Position = lighting.lightTransform * mesh.transform * pos4;
     }
     else
     {
-        gl_Position = camera.transform * pos4;
+        gl_Position = camera.transform * mesh.transform * pos4;
     }
 
     f_texCoord = v_texCoord;
-    f_layer = int(v_position.z);
+    f_layer = v_meshPos.z;
     f_shCoord = lighting.biasTransform * lighting.lightTransform * pos4;
-    f_localZ = v_position.z - d.startingZ;
 }

@@ -11,7 +11,7 @@ namespace RWBaker.Props;
 
 public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable, IDisposable
 {
-    public delegate RenderDescription CompleteDescription(RWVertexData[] vertices, ushort[] indices, PropObject instance, Camera camera, Texture texture);
+    public delegate RenderDescription CompleteDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture);
     public delegate Vector2 TexPosCalculator(int variation, int layer);
 
     public readonly string Name;
@@ -35,6 +35,8 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
 
     public readonly GuiTexture CachedTexture;
 
+    public readonly Mesh Mesh;
+
     /// <summary>Creates an empty prop object</summary>
     /// <remarks>Only use for lack of prop data!</remarks>
     /// <exception cref="Exception">throws if used for rendering</exception>
@@ -42,19 +44,21 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
     {
         Name = "";
 
-        _completeDesc = (_, _, _, _, _) => throw new Exception();
+        _completeDesc = (_, _, _, _, _, _) => throw new Exception();
         _texPosCalculator = (_, _) => throw new Exception();
 
         RenderRepeatLayers = new[] { 1 };
         LayerCount = 1;
 
-        Size = Vector2.One;
+        Size = Vector3.One;
 
         Variants = 1;
 
         Depth = 1;
 
         CachedTexture = GuiManager.MissingTex;
+
+        Mesh = new Mesh();
     }
 
     public PropObject(string name, string properName, CompleteDescription completeDescription, TexPosCalculator texPosCalculator, Vector2 size, int[] repeatLayers, int variants, Scene scene, RWObjectManager manager) : base(scene, properName)
@@ -102,13 +106,18 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
 
         Variants = variants;
 
-        Size = size;
+        Size = new Vector3(size, LayerCount);
+
+        Position = new Vector3(-Size.X / 2,  -Size.Y / 2,0);
 
         if (!GuiTexture.TryGetTexture($"_prop{OriginalName}", out CachedTexture!))
         {
             CachedTexture = GuiTexture.Create($"_prop{OriginalName}", GuiManager.TextureFromImage(texturePath));
         }
         CachedTexture.Use();
+
+        Mesh = new();
+        BuildLayerMesh();
     }
 
     public void RenderInspector()
@@ -148,64 +157,58 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
         */
     }
 
-    public RenderDescription GetRenderDescription(Camera camera)
-    {
-        RWVertexData[] vertices = new RWVertexData[LayerCount * 4];
-        ushort[] indices = new ushort[LayerCount * 6];
+    public RenderDescription GetRenderDescription(Camera camera) => _completeDesc(Mesh, Position, Matrix4x4.CreateRotationZ(Rotation, Position + Size / 2),  this, camera, CachedTexture.Texture);
 
-        int vertIndex = 0;
-        int indexIndex = 0;
+    private void BuildLayerMesh()
+    {
+        Mesh.Clear();
+
+        Mesh.ReadyMerge(LayerCount * 4, LayerCount * 6, true);
+
         int renderLayer = 0;
         for (int imgLayer = 0; imgLayer < RenderRepeatLayers.Length; imgLayer++)
         {
             if (RenderRepeatLayers[imgLayer] == 0) continue;
 
+            // box tiles calculate texture coords in-shader
             Vector2 texPos = _texPosCalculator(RenderVariation, imgLayer);
 
             for (int repeat = 0; repeat < RenderRepeatLayers[imgLayer]; repeat++)
             {
-                vertices[vertIndex] = new RWVertexData(
-                    Position + new Vector3(-Size.X / 2, Size.Y / 2, renderLayer),
-                    texPos,
-                    RgbaFloat.Clear
-                ); // Top Left
+                Mesh.MergeQuad([
+                    new Vertex(
+                        new Vector3(0, Size.Y, renderLayer),
+                        texPos,
+                        RgbaFloat.Clear
+                    ), // Top Left
 
-                vertices[vertIndex + 1] = new RWVertexData(
-                    Position + new Vector3(Size.X / 2, Size.Y / 2, renderLayer),
-                    texPos with { X = texPos.X + Size.X },
-                    RgbaFloat.Clear
-                ); // Top Right
+                    new Vertex(
+                        new Vector3(Size.X, Size.Y, renderLayer),
+                        texPos with { X = texPos.X + Size.X },
+                        RgbaFloat.Clear
+                    ), // Top Right
 
-                vertices[vertIndex + 2] = new RWVertexData(
-                    Position + new Vector3(Size.X / 2, -Size.Y / 2, renderLayer),
-                    texPos + Size,
-                    RgbaFloat.Clear
-                ); // Bottom Right
+                    new Vertex(
+                        new Vector3(Size.X, 0, renderLayer),
+                        new Vector2(texPos.X + Size.X, texPos.Y + Size.Y),
+                        RgbaFloat.Clear
+                    ), // Bottom Right
 
-                vertices[vertIndex + 3] = new RWVertexData(
-                    Position + new Vector3(-Size.X / 2, -Size.Y / 2, renderLayer),
-                    texPos with { Y = texPos.Y + Size.Y },
-                    RgbaFloat.Clear
-                ); // Bottom Left
+                    new Vertex(
+                        new Vector3(0, 0, renderLayer),
+                        texPos with { Y = texPos.Y + Size.Y },
+                        RgbaFloat.Clear
+                    ) // Bottom Left
+                ]);
 
-                // 0 1 2, 2 3 0 for each quad
-                indices[indexIndex]     = (ushort)vertIndex;       // 0
-                indices[indexIndex + 1] = (ushort)(vertIndex + 1); // 1
-                indices[indexIndex + 2] = (ushort)(vertIndex + 2); // 2
-                indices[indexIndex + 3] = (ushort)(vertIndex + 2); // 2
-                indices[indexIndex + 4] = (ushort)(vertIndex + 3); // 3
-                indices[indexIndex + 5] = (ushort)(vertIndex + 0); // 0
-
-                vertIndex += 4;
-                indexIndex += 6;
                 renderLayer++;
             }
         }
 
-        return _completeDesc(vertices, indices, this, camera, CachedTexture.Texture);
+        Mesh.AllocatedMergeOver();
     }
 
-    public Vector2Int GetRenderSize(Camera camera) => (Vector2Int)Size + (LayerCount - 1) * Vector2.One; // TODO: FIX
+    public Vector2Int GetRenderSize(Camera camera) => new Vector2Int((int)Size.X, (int)Size.Y) + (LayerCount - 1) * Vector2.One; // TODO: FIX
 
     public void Dispose()
     {

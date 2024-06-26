@@ -6,23 +6,6 @@ using RWBaker.Tiles;
 
 namespace RWBaker.Rendering;
 
-#region Voxeliser
-
-[StructLayout(LayoutKind.Sequential)]
-public struct VoxeliserInput
-{
-    public readonly Vector2 SizePerLayer;
-    public readonly ushort[] RepeatLayers;
-
-    public VoxeliserInput(Vector2 sizePerLayer, ushort[] repeatLayers)
-    {
-        SizePerLayer = sizePerLayer; // 8
-        RepeatLayers = repeatLayers; // 4 * size
-    }
-}
-
-#endregion
-
 #region Scene Uniforms
 [StructLayout(LayoutKind.Sequential)]
 public struct CameraUniform

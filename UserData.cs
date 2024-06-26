@@ -28,7 +28,7 @@ public class UserData
     public WindowState WindowState;
     public Vector2Int ScalingFactor;
     public bool VSync;
-    public bool DebugGraphics;
+    public bool DebugMode;
 
     // Last palette info
     public string SavedPaletteDir;
@@ -65,7 +65,7 @@ public class UserData
         WindowState = WindowState.Normal;
         ScalingFactor = Vector2Int.One;
         VSync = false;
-        DebugGraphics = false;
+        DebugMode = false;
 
         SavedPaletteDir = "";
         UsingPalette1 = "";
@@ -98,7 +98,7 @@ public class UserData
         WindowState = GuiManager.Window.WindowState;
         ScalingFactor = (Vector2Int)GuiManager.ScaleFactor;
         VSync = GuiManager.GraphicsDevice.SyncToVerticalBlank;
-        DebugGraphics = GuiManager.DebugGraphics;
+        DebugMode = GuiManager.DebugMode;
 
         SavedPaletteDir = palettes.PaletteDir;
         UsingPalette1 = palettes.PaletteA.Name;

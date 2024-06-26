@@ -1,7 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
@@ -16,40 +16,6 @@ using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
 
 namespace RWBaker.Gui;
-
-[Flags]
-public enum FreeTypeBuilderFlags : uint
-{
-    /// <summary>Disable hinting. This generally generates 'blurrier' bitmap glyphs when the glyph are rendered in any of the anti-aliased modes.</summary>
-    ImGuiFreeTypeBuilderFlags_NoHinting     = 1 << 0,
-
-    /// <summary>Disable auto-hinter.</summary>
-    ImGuiFreeTypeBuilderFlags_NoAutoHint    = 1 << 1,
-
-    /// <summary>Indicates that the auto-hinter is preferred over the font's native hinter.</summary>
-    ImGuiFreeTypeBuilderFlags_ForceAutoHint = 1 << 2,
-
-    /// <summary>A lighter hinting algorithm for gray-level modes. Many generated glyphs are fuzzier but better resemble their original shape. This is achieved by snapping glyphs to the pixel grid only vertically (Y-axis), as is done by Microsoft's ClearType and Adobe's proprietary font renderer. This preserves inter-glyph spacing in horizontal text.</summary>
-    ImGuiFreeTypeBuilderFlags_LightHinting  = 1 << 3,
-
-    /// <summary>Strong hinting algorithm that should only be used for monochrome output.</summary>
-    ImGuiFreeTypeBuilderFlags_MonoHinting   = 1 << 4,
-
-    /// <summary>Styling: Should we artificially embolden the font?</summary>
-    ImGuiFreeTypeBuilderFlags_Bold          = 1 << 5,
-
-    /// <summary>Styling: Should we slant the font, emulating italic style?</summary>
-    ImGuiFreeTypeBuilderFlags_Oblique       = 1 << 6,
-
-    /// <summary>Disable anti-aliasing. Combine this with MonoHinting for best results!</summary>
-    ImGuiFreeTypeBuilderFlags_Monochrome    = 1 << 7,
-
-    /// <summary>Enable FreeType color-layered glyphs</summary>
-    ImGuiFreeTypeBuilderFlags_LoadColor     = 1 << 8,
-
-    /// <summary>Enable FreeType bitmap glyphs</summary>
-    ImGuiFreeTypeBuilderFlags_Bitmap        = 1 << 9
-};
 
 public static class GuiManager
 {
@@ -90,15 +56,25 @@ public static class GuiManager
     public static int WindowPosX { get; private set; }
     public static int WindowPosY { get; private set; }
 
-    public static bool DebugGraphics { get; private set; }
+    /// <summary>
+    /// Enables easier debugging when running with a debugger
+    /// <br/>
+    /// Enables window exceptions to crash
+    /// <br/>
+    /// Enables DebugGraphics in Graphics
+    /// </summary>
+    public static bool DebugMode { get; private set; }
 
     public static Vector2 ScaleFactor { get; private set; }
 
     private static readonly List<Window> windows = new();
-    public static ReadOnlyCollection<Window> Windows => windows.AsReadOnly();
+    public static ReadOnlySpan<Window> Windows => windows.ToImmutableArray().AsSpan();
 
     private static readonly List<Window> windowsToDelete = new();
     private static readonly List<Window> windowsToAdd = new();
+
+    private static readonly List<ImNotify> notifications = new();
+    private static readonly List<ImNotify> notificationsToRemove = new();
 
     public static void Load(UserData userData)
     {
@@ -118,7 +94,7 @@ public static class GuiManager
                 "RWBaker"
             ),
             new GraphicsDeviceOptions(
-                userData.DebugGraphics,
+                userData.DebugMode,
                 null,
                 userData.VSync,
                 ResourceBindingModel.Improved,
@@ -157,7 +133,7 @@ public static class GuiManager
         };
 
         ScaleFactor = (Vector2)userData.ScalingFactor;
-        DebugGraphics = userData.DebugGraphics;
+        DebugMode = userData.DebugMode;
 
         GraphicsDevice = graphics;
         ResourceFactory = graphics.ResourceFactory;
@@ -199,7 +175,7 @@ public static class GuiManager
             UpdateImGui(time, snapshot);
             Utils.Nav();
 
-            ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+            ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport(), ImGuiDockNodeFlags.PassthruCentralNode);
 
             if (windowsToAdd.Count > 0)
             {
@@ -233,9 +209,32 @@ public static class GuiManager
                 }
                 catch (Exception e)
                 {
+                    if (DebugMode) throw;
+
                     RemoveWindow(w);
                     Exception(e);
                 }
+            }
+
+            // Render active notifications
+            Vector2 viewportSize = ImGui.GetMainViewport().Size;
+
+            float height = 0f;
+
+            foreach (ImNotify notify in notifications)
+            {
+                notify.Render(viewportSize, ref height);
+            }
+
+            if (notificationsToRemove.Count > 0)
+            {
+                // Delete notifications marked for deletion
+                foreach (ImNotify notify in notificationsToRemove)
+                {
+                    notifications.Remove(notify);
+                }
+
+                notificationsToRemove.Clear();
             }
 
             CommandList.Begin();
@@ -303,15 +302,15 @@ public static class GuiManager
         IconTexture = GuiTexture.CreateFromEmbedded("_icon", "res.bakertex.png");
     }
 
-    // TODO: Custom font support later?
     private static void RecreateFonts()
     {
-        fontRef.Dispose();
         fontTex?.Release();
 
         ImGuiIOPtr io = ImGui.GetIO();
 
         io.Fonts.AddFontDefault();
+        FontRef.MergeIcons(io.Fonts, 12);
+
         fontRef = new FontRef(io.Fonts, Utils.GetEmbeddedBytes("res.ProggyVector-Regular.ttf"), "ProggyVector-Regular.ttf");
 
         io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height, out int bytesPerPixel);
@@ -437,6 +436,17 @@ public static class GuiManager
     public static void Exception(Exception e)
     {
         AddWindow(new ExceptionWindow(e));
+    }
+
+    public static void PushNotification(ImNotify notify)
+    {
+        notify.ManagerRegister(notifications.Count);
+        notifications.Add(notify);
+    }
+
+    public static void RemoveNotification(ImNotify notify)
+    {
+        notificationsToRemove.Add(notify);
     }
 
     // Below is dedicated to ImGui

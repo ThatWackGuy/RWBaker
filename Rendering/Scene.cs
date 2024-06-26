@@ -123,7 +123,7 @@ public class Scene : IInspectable, IDisposable
     }
 
     /**
-     * Renders all <see cref="Camera"/>s in Scene.<see cref="Cameras"/>
+     * Renders all <see cref="Camera"/>s in Scene.
      */
     public void Render()
     {

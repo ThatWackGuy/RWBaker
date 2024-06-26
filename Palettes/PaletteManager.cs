@@ -99,7 +99,7 @@ public class PaletteManager : IDisposable
 
         _defaultEffectColors = GuiTexture.CreateFromImage("_effectColors", Utils.GetEmbeddedBytes("res.effectcolors.png"));
         EffectColors = _defaultEffectColors;
-        _effectColorB = userData.EffectColorA;
+        _effectColorA = userData.EffectColorA;
         _effectColorB = userData.EffectColorB;
 
         _defaultPalette = new Palette(Image.Load<Rgba32>(Utils.GetEmbeddedBytes("res.palette0.png")), "default0");
@@ -111,22 +111,27 @@ public class PaletteManager : IDisposable
         _lastB = userData.UsingPalette2;
 
         PaletteInfo = GuiManager.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        PalettesChanged += () => GuiManager.GraphicsDevice.UpdateBuffer(PaletteInfo, 0, new PaletteUniform(this));
+        PalettesChanged += () =>
+        {
+            _lastA = _paletteA.Name;
+            _lastB = _paletteB.Name;
+
+            GuiManager.GraphicsDevice.UpdateBuffer(PaletteInfo, 0, new PaletteUniform(this));
+        };
     }
 
     public void GetPalettes(string path)
     {
         foreach (Palette palette in Palettes)
         {
-            palette.Dispose();
+            palette.Release();
         }
+
         Palettes.Clear();
 
-        if (EffectColors != _defaultEffectColors)EffectColors?.Dispose();
+        if (EffectColors != _defaultEffectColors) EffectColors?.Release();
 
-        if (_paletteA != _defaultPalette) _paletteA.Dispose();
-        if (_paletteB != _defaultPalette) _paletteB.Dispose();
-        if (_currentPalette != _defaultPalette) _currentPalette.Dispose();
+        if (_currentPalette != _defaultPalette) _currentPalette.Release();
 
         if (path != "")
         {
@@ -144,7 +149,7 @@ public class PaletteManager : IDisposable
                     continue;
                 }
 
-                Image<Rgba32> image = Image.Load<Rgba32>(file);
+                using Image<Rgba32> image = Image.Load<Rgba32>(file);
                 Palette palette = new(image, fileName);
 
                 Palettes.Add(palette);
@@ -153,10 +158,7 @@ public class PaletteManager : IDisposable
 
         PaletteDir = path;
 
-        if (EffectColors == null)
-        {
-            EffectColors = _defaultEffectColors;
-        }
+        EffectColors ??= _defaultEffectColors;
 
         if (Palettes.Count == 0)
         {
@@ -168,29 +170,8 @@ public class PaletteManager : IDisposable
             return;
         }
 
-        if (_lastA != "")
-        {
-            if (Palettes.Any(p => p.Name == _lastA))
-            {
-                _paletteA = Palettes.First(p => p.Name == _lastA);
-            }
-            else
-            {
-                _paletteA = Palettes.First();
-            }
-        }
-
-        if (_lastB != "")
-        {
-            if (Palettes.Any(p => p.Name == _lastB))
-            {
-                _paletteB = Palettes.First(p => p.Name == _lastB);
-            }
-            else
-            {
-                _paletteB = Palettes.First();
-            }
-        }
+        _paletteA = Palettes.Any(p => p.Name == _lastA) ? Palettes.First(p => p.Name == _lastA) : Palettes.First();
+        _paletteB = Palettes.Any(p => p.Name == _lastB) ? Palettes.First(p => p.Name == _lastB) : Palettes.First();
 
         _currentPalette = Palette.MixPalettes(PaletteA, PaletteB, PaletteBlend);
         _lastA = PaletteA.Name;
@@ -203,11 +184,12 @@ public class PaletteManager : IDisposable
     {
         foreach (Palette palette in Palettes)
         {
-            palette.Dispose();
+            palette.Release();
         }
+
         Palettes.Clear();
 
-        _defaultPalette.Dispose();
+        _defaultPalette.Release();
 
         _defaultEffectColors.Dispose();
         EffectColors?.Dispose();

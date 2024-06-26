@@ -1,21 +1,37 @@
 #version 450
 
-layout(set = 0, binding = 0, std140) uniform CameraInfo
+layout(set = 0, binding = 0, std140) uniform CameraData
 {
     mat4 transform;
+} camera;
+
+layout(set = 0, binding = 1, std140) uniform PassData
+{
+    uint idx;
+    vec2 size;
+} pass;
+
+layout(set = 0, binding = 2, std140) uniform LightData
+{
     mat4 lightTransform;
+    mat4 biasTransform;
+    float shadowBias;
+    float pRain;
+} lighting;
 
-    float stcId; // current stencil id
-    vec2 cameraSize; // current stencil size
-
+layout(set = 0, binding = 3, std140) uniform PaletteData
+{
     vec2 effectColorsSize;
     uint effectA;
     uint effectB;
+} palette;
 
-    float pRain;
-} s;
+layout(set = 0, binding = 4, std140) uniform MeshData
+{
+    mat4 transform;
+} mesh;
 
-layout(set = 0, binding = 1, std140) uniform RenderData
+layout(set = 0, binding = 5, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;
@@ -29,13 +45,16 @@ layout(location = 1) in vec2 v_texCoord;
 layout(location = 2) in vec4 v_color;
 
 layout(location = 0) out vec2 f_texCoord;
-layout(location = 1) out flat int f_layer;
+layout(location = 1) out float f_layer;
 
 void main()
 {
+    vec4 vpos4 = vec4(v_position.xyz, 1);
+    vec4 v_meshPos = mesh.transform * vpos4;
+
     // decals don't have shadows
-    gl_Position = s.transform * vec4(v_position.xyz, 1);
+    gl_Position = camera.transform * mesh.transform * vpos4;
 
     f_texCoord = v_texCoord;
-    f_layer = int(v_position.z);
+    f_layer = v_meshPos.z;
 }

@@ -3,7 +3,9 @@ using System.Numerics;
 using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Windows;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace RWBaker.Palettes;
 
@@ -89,7 +91,7 @@ public class PalettePicker : Window
         {
             if (palettes.CurrentPalette.Name != $"{palettes.PaletteA.Name} {palettes.PaletteBlend} {palettes.PaletteB.Name}")
             {
-                if (palettes.CurrentPalette.isMixed) palettes.CurrentPalette.DisplayTex.Dispose();
+                if (palettes.CurrentPalette.isMixed) palettes.CurrentPalette.Release();
                 palettes.CurrentPalette = Palette.MixPalettes(palettes.PaletteA, palettes.PaletteB, palettes.PaletteBlend);
             }
         }
@@ -99,7 +101,8 @@ public class PalettePicker : Window
         if (ImGui.Button("SAVE"))
         {
             FileStream stream = File.Create(Path.Combine(palettes.PaletteDir, $"{cPaletteOutputName}.png"));
-            palettes.CurrentPalette.Image.Save(stream, new PngEncoder());
+            using Image<Rgba32> imageToSave = palettes.CurrentPalette.DisplayTex.ToImage(true);
+            imageToSave.Save(stream, new PngEncoder());
             stream.Close();
         }
 

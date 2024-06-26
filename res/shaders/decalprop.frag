@@ -1,21 +1,37 @@
 #version 450
 
-layout(set = 0, binding = 0, std140) uniform CameraInfo
+layout(set = 0, binding = 0, std140) uniform CameraData
 {
     mat4 transform;
+} camera;
+
+layout(set = 0, binding = 1, std140) uniform PassData
+{
+    uint idx;
+    vec2 size;
+} pass;
+
+layout(set = 0, binding = 2, std140) uniform LightData
+{
     mat4 lightTransform;
+    mat4 biasTransform;
+    float shadowBias;
+    float pRain;
+} lighting;
 
-    float stcId; // current stencil id
-    vec2 cameraSize; // current stencil size
-
+layout(set = 0, binding = 3, std140) uniform PaletteData
+{
     vec2 effectColorsSize;
     uint effectA;
     uint effectB;
+} palette;
 
-    float pRain;
-} s;
+layout(set = 0, binding = 4, std140) uniform MeshData
+{
+    mat4 transform;
+} mesh;
 
-layout(set = 0, binding = 1, std140) uniform RenderData
+layout(set = 0, binding = 5, std140) uniform RenderData
 {
     float startingZ;
     float layerCount;
@@ -28,7 +44,7 @@ layout(set = 1, binding = 0) uniform sampler2D tex; // prop texture
 layout(set = 1, binding = 1) uniform sampler2D rTex; // removal depth map
 
 layout(location = 0) in vec2 f_texCoord;
-layout(location = 1) flat in int f_layer;
+layout(location = 1) in float f_layer;
 
 layout(location = 0) out vec4 out_color;
 
@@ -43,7 +59,7 @@ void main()
         discard;
     }
 
-    if (gl_FragCoord.z < texture(rTex, gl_FragCoord.xy / s.cameraSize).g)
+    if (gl_FragCoord.z < texture(rTex, gl_FragCoord.xy / pass.size).g)
     {
         discard;
     }

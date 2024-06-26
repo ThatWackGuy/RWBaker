@@ -1,17 +1,17 @@
 using System;
-using System.Runtime.InteropServices;
 using ImGuiNET;
 
 namespace RWBaker.Gui;
 
-public struct FontRef : IDisposable
+public struct FontRef
 {
+    private static readonly byte[] iconBytes = Utils.GetEmbeddedBytes("res.codicon.ttf");
+
     public readonly string Name;
     public readonly ImFontConfigPtr ConfigPtr;
     public readonly ImFontPtr FontPtr;
-    public readonly IntPtr MemoryRef;
 
-    public FontRef(ImFontAtlasPtr atlas, byte[] bytes, string name, float size = 13)
+    public unsafe FontRef(ImFontAtlasPtr atlas, byte[] bytes, string name, float size = 16)
     {
         string add = $", {size}px";
 
@@ -19,29 +19,69 @@ public struct FontRef : IDisposable
 
         Name = name + add;
 
-        unsafe
+        ImFontConfig* config = ImGuiNative.ImFontConfig_ImFontConfig();
+
+        for (int i = 0; i < Name.Length; i++)
         {
-            ImFontConfig* config = ImGuiNative.ImFontConfig_ImFontConfig();
-
-            config->FontBuilderFlags = (uint)(FreeTypeBuilderFlags.ImGuiFreeTypeBuilderFlags_MonoHinting | FreeTypeBuilderFlags.ImGuiFreeTypeBuilderFlags_Monochrome);
-            config->FontDataOwnedByAtlas = 0;
-
-            for (int i = 0; i < Name.Length; i++)
-            {
-                config->Name[i] = (byte)Name[i];
-            }
-
-            ConfigPtr = new ImFontConfigPtr(config);
+            config->Name[i] = (byte)Name[i];
         }
 
-        MemoryRef = Marshal.AllocHGlobal(bytes.Length);
-        Marshal.Copy(bytes, 0, MemoryRef, bytes.Length);
+        ConfigPtr = new ImFontConfigPtr(config);
 
-        FontPtr = atlas.AddFontFromMemoryTTF(MemoryRef, bytes.Length, size * 1.2f, ConfigPtr);
+        fixed (byte* fontPtr = bytes)
+        {
+            FontPtr = atlas.AddFontFromMemoryTTF(new IntPtr(fontPtr), bytes.Length, size, ConfigPtr);
+        }
+
+        ImFontConfig* iconConfig = ImGuiNative.ImFontConfig_ImFontConfig();
+
+        iconConfig->MergeMode = 1;
+        iconConfig->PixelSnapH = 1;
+        iconConfig->GlyphMinAdvanceX = size;
+
+        ushort[] ranges = [Codicons.IconMin, Codicons.IconMax16, 0];
+
+        fixed (ushort* iconRanges = ranges)
+        {
+            iconConfig->GlyphRanges = iconRanges;
+        }
+
+        const string iconsName = "Codicons";
+        for (int i = 0; i < iconsName.Length; i++)
+        {
+            iconConfig->Name[i] = (byte)iconsName[i];
+        }
+
+        fixed (byte* fontPtr = iconBytes)
+        {
+            atlas.AddFontFromMemoryTTF(new IntPtr(fontPtr), iconBytes.Length, size, iconConfig);
+        }
     }
 
-    public void Dispose()
+    public static unsafe void MergeIcons(ImFontAtlasPtr atlas, float size)
     {
-        Marshal.FreeHGlobal(MemoryRef);
+        ImFontConfig* iconConfig = ImGuiNative.ImFontConfig_ImFontConfig();
+
+        iconConfig->MergeMode = 1;
+        iconConfig->PixelSnapH = 1;
+        iconConfig->GlyphMinAdvanceX = size;
+
+        ushort[] ranges = [Codicons.IconMin, Codicons.IconMax16, 0];
+
+        fixed (ushort* iconRanges = ranges)
+        {
+            iconConfig->GlyphRanges = iconRanges;
+        }
+
+        const string iconsName = "Codicons";
+        for (int i = 0; i < iconsName.Length; i++)
+        {
+            iconConfig->Name[i] = (byte)iconsName[i];
+        }
+
+        fixed (byte* fontPtr = iconBytes)
+        {
+            atlas.AddFontFromMemoryTTF(new IntPtr(fontPtr), iconBytes.Length, size, iconConfig);
+        }
     }
 }
