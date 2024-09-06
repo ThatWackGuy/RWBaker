@@ -3,18 +3,13 @@ using ImGuiNET;
 
 namespace RWBaker.Windows;
 
-public class ExceptionWindow : Window
+public class ExceptionWindow(Exception exception, string name, Action<ExceptionWindow>? destroyCallback) : Window(name, exception.Message)
 {
-    private readonly string _exception;
-
-    public ExceptionWindow(Exception exception) : base("AN EXCEPTION WAS THROWN", exception.Message)
-    {
-        _exception = exception.ToString();
-    }
+    private readonly string _exception = exception.ToString();
 
     protected override void Draw()
     {
-        Begin(ImGuiWindowFlags.AlwaysAutoResize);
+        if (!Begin(ImGuiWindowFlags.AlwaysAutoResize)) return;
 
         ImGui.Text(_exception);
 
@@ -28,5 +23,8 @@ public class ExceptionWindow : Window
 
     protected override void Destroy()
     {
+        destroyCallback?.Invoke(this);
     }
+
+    public void Close() => open = false;
 }

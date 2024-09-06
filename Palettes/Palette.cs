@@ -1,3 +1,4 @@
+using System;
 using RWBaker.Gui;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -5,7 +6,7 @@ using Veldrid;
 
 namespace RWBaker.Palettes;
 
-public class Palette
+public class Palette : IDisposable
 {
     public readonly string Name;
     public readonly GuiTexture DisplayTex;
@@ -20,7 +21,6 @@ public class Palette
 
         Texture dTex = GuiManager.TextureFromImage(image);
         DisplayTex = GuiTexture.Create(name, dTex);
-        DisplayTex.Use();
 
         isMixed = false;
 
@@ -39,7 +39,6 @@ public class Palette
 
         Texture dTex = GuiManager.TextureFromImage(mixed);
         DisplayTex = GuiTexture.Create(Name, dTex);
-        DisplayTex.Use();
 
         isMixed = true;
     }
@@ -56,8 +55,8 @@ public class Palette
 
     public static Palette MixPalettes(Palette palA, Palette palB, float blend) => new(palA, palB, blend);
 
-    public void Release()
+    public void Dispose()
     {
-        DisplayTex.Release();
+        DisplayTex.Dispose();
     }
 }

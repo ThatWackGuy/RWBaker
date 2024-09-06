@@ -17,22 +17,30 @@ public enum CameraBgState
     Custom
 }
 
+public enum CameraSizeConstraint
+{
+    Screen,
+    Grid,
+    Custom
+}
+
 public class Camera : SceneObject, IInspectable, IDisposable
 {
-    // Used in calculating camera position
-    // More distance -> Less precision
-    private const int NEAR_PLANE_DIVISOR = 5;
-    private const int NEAR_PLANE_DISTANCE = 100;
-
     public float SunAzimuth;
     public float SunAltitude;
     private Vector3 sunPosition;
+
+    public CameraSizeConstraint SizeConstraint { private get; set; }
 
     public float ShadowBias = 0.0003f;
 
     public float StaticDepth = 5;
 
-    public float CameraDistance => NEAR_PLANE_DIVISOR * NEAR_PLANE_DISTANCE - StaticDepth;
+    // Used in calculating camera position
+    // More distance -> Less precision
+    private int NearPlaneDivisor = 5;
+    private int NearPlaneDistance = 100;
+    public float CameraDistance => NearPlaneDivisor * NearPlaneDistance - StaticDepth;
 
     public uint Width => (uint)Size.X;
     public uint Height => (uint)Size.Y;
@@ -47,7 +55,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
     private DeviceBuffer _vtxBuffer;
     private DeviceBuffer _idxBuffer;
 
-    private readonly Dictionary<string, Pipeline> _pipelineCache = new();
+    private readonly Dictionary<(RenderPass, Shader), Pipeline> _pipelineCache = new();
 
     public RenderPass RemovalPass { get; private set; }
     public RenderPass LightingPass { get; private set; }
@@ -73,7 +81,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
     public Camera(Scene owner) : base(owner, "Camera")
     {
-        Size = Vector3.One;
+        Size = new Vector3(1440, 860, 1);
 
         SunAzimuth = 0;
         SunAltitude = 0;
@@ -159,18 +167,77 @@ public class Camera : SceneObject, IInspectable, IDisposable
             if (ImGui.ColorPicker4("Custom Background", ref col)) BackgroundColor = new RgbaFloat(col);
         }
 
+        comboPreview = SizeConstraint switch
+        {
+            CameraSizeConstraint.Grid => "Grid",
+            CameraSizeConstraint.Screen => "Screen",
+            CameraSizeConstraint.Custom => "Custom",
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        bool sizeChanged = false;
+        if (ImGui.BeginCombo("##size_constraint", comboPreview))
+        {
+            if (ImGui.Selectable("Grid"))
+            {
+                SizeConstraint = CameraSizeConstraint.Grid;
+                Size.X = float.Ceiling(Size.X / 20f) * 20f;
+                Size.Y = float.Ceiling(Size.Y / 20f) * 20f;
+                sizeChanged = true;
+            }
+
+            if (ImGui.Selectable("Screen"))
+            {
+                SizeConstraint = CameraSizeConstraint.Screen;
+                Size.X = float.Ceiling(Size.X / 1440f) * 1440f;
+                Size.Y = float.Ceiling(Size.Y / 860f) * 860f;
+                sizeChanged = true;
+            }
+
+            if (ImGui.Selectable("Custom"))
+            {
+                SizeConstraint = CameraSizeConstraint.Custom;
+            }
+
+            ImGui.EndCombo();
+        }
+
+        int sizeW = (int)Size.X;
+        int sizeH = (int)Size.Y;
+
+        (int segmentX, int segmentY) = SizeConstraint switch
+        {
+            CameraSizeConstraint.Grid => (20, 20),
+            CameraSizeConstraint.Screen => (1440, 860),
+            CameraSizeConstraint.Custom => (1, 1),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        sizeChanged |= ImGui.InputInt("Width", ref sizeW, segmentX);
+        sizeChanged |= ImGui.InputInt("Height", ref sizeH, segmentY);
+
+        if (sizeChanged && (sizeW != 0 & sizeH != 0))
+        {
+            WaitingForCameraRecreate = true;
+            WaitingForLightingRecreate = true;
+            Size = new Vector3(sizeW, sizeH, Size.Z);
+        }
+
         ImGui.SeparatorText("SUN SETTINGS");
 
-        if (ImGui.SliderAngle("Sun Azimuth", ref SunAzimuth, -90, 90)) WaitingForLightingRecreate = true;
-        if (ImGui.SliderAngle("Sun Altitude", ref SunAltitude, -90, 90)) WaitingForLightingRecreate = true;
-        if (ImGui.DragFloat("Shadow Bias", ref ShadowBias, 0.000001f, 0f, 0.0001f)) WaitingForLightingRecreate = true;
+        WaitingForLightingRecreate |= ImGui.SliderAngle("Sun Azimuth", ref SunAzimuth, -90, 90);
+        WaitingForLightingRecreate |= ImGui.SliderAngle("Sun Altitude", ref SunAltitude, -90, 90);
+        WaitingForLightingRecreate |= ImGui.DragFloat("Shadow Bias", ref ShadowBias, 0.000001f, 0f, 0.0001f);
 
         ImGui.Text($"Sun at: {sunPosition.ToString()}");
 
         ImGui.SeparatorText("PROJECTOR SETTINGS");
 
-        if (ImGui.SliderFloat("##projectorx", ref ProjectorOffset.X, -500, 500)) WaitingForCameraRecreate = true;
-        if (ImGui.SliderFloat("##projectory", ref ProjectorOffset.Y, -500, 500)) WaitingForCameraRecreate = true;
+        WaitingForCameraRecreate |= ImGui.SliderFloat("##projectorx", ref ProjectorOffset.X, -500, 500);
+        WaitingForCameraRecreate |= ImGui.SliderFloat("##projectory", ref ProjectorOffset.Y, -500, 500);
+
+        WaitingForCameraRecreate |= ImGui.SliderInt("NP Divisor", ref NearPlaneDivisor, 1, 10);
+        WaitingForCameraRecreate |= ImGui.SliderInt("NP Distance", ref NearPlaneDistance, 1, 5000);
 
         ImGui.Separator();
 
@@ -193,7 +260,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
         BackgroundColor = state switch
         {
             CameraBgState.Clear => RgbaFloat.Clear,
-            CameraBgState.Sky => ImageUtils.MixRgbaFloat(Scene.PaletteManager.CurrentPalette.CameraSky, Scene.PaletteManager.CurrentPalette.CameraSkyRain, RainPercentage), // Mix rain sky based on percentage
+            CameraBgState.Sky => Scene.PaletteManager.CurrentPalette.CameraSky.MixRgbaFloat(Scene.PaletteManager.CurrentPalette.CameraSkyRain, RainPercentage), // Mix rain sky based on percentage
             CameraBgState.White => RgbaFloat.White,
             CameraBgState.Custom => BackgroundColor,
             _ => throw new ArgumentOutOfRangeException(nameof(state))
@@ -203,13 +270,6 @@ public class Camera : SceneObject, IInspectable, IDisposable
     public void Resize(Vector2 size)
     {
         Size = new Vector3(size, 1);
-
-        Recreate();
-    }
-
-    public void Resize(IRenderable renderable)
-    {
-        Size = new Vector3((Vector2)renderable.GetRenderSize(this), 1);
 
         Recreate();
     }
@@ -268,8 +328,8 @@ public class Camera : SceneObject, IInspectable, IDisposable
             Vector3.Zero,
             Vector3.UnitY
         ) * Utils.CreatePerspectiveOffsetProjection(
-            Size.X / NEAR_PLANE_DIVISOR,
-            Size.Y / NEAR_PLANE_DIVISOR,
+            Size.X / NearPlaneDivisor,
+            Size.Y / NearPlaneDivisor,
             100,
             float.PositiveInfinity,
             ProjectorOffset.X,
@@ -445,7 +505,8 @@ public class Camera : SceneObject, IInspectable, IDisposable
 
     public Pipeline EnsurePipelineForPass(RenderPass pass, Shader[] shaders, ResourceLayout[] layouts)
     {
-        if (_pipelineCache.TryGetValue(pass.Id, out Pipeline? pipeline)) return pipeline;
+        var check = (pass, shaders[0]);
+        if (_pipelineCache.TryGetValue(check, out Pipeline? pipeline)) return pipeline;
 
         pipeline = GuiManager.ResourceFactory.CreateGraphicsPipeline(
             new GraphicsPipelineDescription(
@@ -459,7 +520,7 @@ public class Camera : SceneObject, IInspectable, IDisposable
             )
         );
 
-        _pipelineCache.Add(pass.Id, pipeline);
+        _pipelineCache.Add(check, pipeline);
 
         return pipeline;
     }

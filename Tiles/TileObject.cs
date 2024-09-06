@@ -14,6 +14,8 @@ namespace RWBaker.Tiles;
 
 public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 {
+    private static Shader[]? shaders;
+
     public readonly string Name;
     public readonly string ProperName;
     public readonly int[] RepeatLayers;
@@ -62,12 +64,11 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public TileObject(Scene scene, RWObjectManager manager, TileInfo cache) : base(scene, cache.ProperName)
     {
+        shaders ??= RWUtils.FetchVertFragFromFile("./shaders/tile");
+
         string texturePath = Path.Combine(manager.GraphicsDir, $"{cache.Name}.png");
 
-        if (!File.Exists(texturePath))
-        {
-            throw new FileNotFoundException("Please check the names or if the file has been deleted!");
-        }
+        if (!File.Exists(texturePath)) throw new FileNotFoundException("Please check the names or if the file has been deleted!");
 
         Name = cache.Name;
         ProperName = cache.ProperName;
@@ -121,13 +122,11 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
             image.Mutate(ctx =>
             {
                 ctx.FixFutileTexture((int)Size.X * Variants, (int)Size.Y * RepeatLayers.Length);
-                ctx.ReadyFutileTexture();
+                ctx.ReadyFutileTexture(false);
             });
 
             CachedTexture = GuiTexture.Create($"_tile{ProperName}", GuiManager.TextureFromImage(image));
         }
-
-        CachedTexture.Use();
 
         Mesh = new Mesh();
         BuildLayerMesh();
@@ -152,23 +151,12 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
 
     public RenderDescription GetRenderDescription(Camera camera)
     {
-        ResourceSet textureSet = GuiManager.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.RWObjectTextureLayout,
-                CachedTexture.Texture,
-                Scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
-                Scene.PaletteManager.EffectColors.Texture,
-                camera.LightingPass.DepthTexture,
-                camera.RemovalPass.RenderTexture.Texture
-            )
-        );
-
         lock (Mesh) return new RenderDescription(
             Mesh, Position, Matrix4x4.Identity,
-            textureSet,
+            RWUtils.StandardTextureSet(CachedTexture.Texture, camera),
             new RWTileRenderUniform(this),
             false, true, true,
-            RWUtils.RWResourceLayout, RWUtils.TileShaders,
+            RWUtils.RWResourceLayout, shaders!,
             [], []
         );
     }
@@ -176,12 +164,6 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
     private void BuildLayerMesh()
     {
         Mesh.Clear();
-
-        /*if (File.Exists($"./cache/meshes/{ProperName} VAR{RenderVariation}"))
-        {
-            Mesh.MergeBytes(File.ReadAllBytes($"./cache/meshes/{ProperName} VAR{RenderVariation}"));
-            return;
-        }*/
 
         Mesh.ReadyMerge(LayerCount * 4, LayerCount * 6, true);
 
@@ -226,33 +208,11 @@ public class TileObject : SceneObject, IRenderable, IInspectable, IDisposable
         }
 
         Mesh.AllocatedMergeOver();
-
-        /*Image<Rgba32> image = CachedTexture.ToImage(true);
-
-        Parallel.For(0, RepeatLayers.Length, ly =>
-        {
-            Mesh extruded = image.ExtrudeEdgesAsMesh(new Rectangle(RenderVariation * (int)Size.X, 1 + ly * (int)Size.Y, (int)Size.X, (int)Size.Y), ly);
-
-            for (int repeated = 0; repeated < RepeatLayers[ly]; repeated++)
-            {
-                lock (Mesh) Mesh.MergeMesh(extruded, Vector3.UnitZ * repeated);
-            }
-        });
-
-        GuiManager.PushNotification(new ImNotify(ImNotifyType.Success, $"Successfully built mesh {ProperName} VAR{RenderVariation}"));*/
-
-        /*Directory.CreateDirectory("./cache/meshes");
-        using FileStream file = File.Create($"./cache/meshes/{ProperName} VAR{RenderVariation}");
-
-        lock (Mesh) file.Write(Mesh.AsBytes());
-        file.Close();*/
     }
-
-    public Vector2Int GetRenderSize(Camera camera) => new Vector2Int((int)Size.X, (int)Size.Y) + (LayerCount - 1) * Vector2.One; // TODO: FIX
 
     public void Dispose()
     {
-        CachedTexture.Release();
+        CachedTexture.Dispose();
 
         GC.SuppressFinalize(this);
     }

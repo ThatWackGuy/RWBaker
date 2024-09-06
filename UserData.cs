@@ -54,6 +54,9 @@ public class UserData
     public bool PropUseUnlit;
     public float PropUseRain;
 
+    [NonSerialized]
+    public Exception? FailedLoad;
+
     /// <summary>
     /// Loads the default options
     /// </summary>
@@ -123,14 +126,30 @@ public class UserData
 
     public static UserData Load(string path)
     {
-        UserData? loaded = JsonSerializer.Deserialize<UserData>(
-            File.ReadAllText(path),
-            JsonOptions
-        );
+        UserData loaded;
 
-        if (loaded == null)
+        if (!File.Exists(path))
         {
-            throw new JsonException($"An error occured while parsing userdata!\nPlease check {path}");
+            File.Create("./userdata.json").Close();
+
+            return new UserData();
+        }
+
+        try
+        {
+            UserData? tryLoad = JsonSerializer.Deserialize<UserData>(
+                File.ReadAllText(path),
+                JsonOptions
+            );
+
+            loaded = tryLoad ?? throw new JsonException($"An error occured while parsing userdata!\nPlease check {path}");
+        }
+        catch (Exception e)
+        {
+            loaded = new UserData
+            {
+                FailedLoad = e
+            };
         }
 
         return loaded;

@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using ImGuiNET;
 using System.Runtime.InteropServices;
+using System.Text;
 using RWBaker.Gui;
 using RWBaker.Palettes;
-using RWBaker.Props;
-using RWBaker.Tiles;
 using RWBaker.Windows;
 using Veldrid;
+using Veldrid.SPIRV;
+using Vortice.ShaderCompiler;
 
 namespace RWBaker;
 
@@ -81,6 +84,21 @@ public static class Utils
         return defMatrix;
     }
 
+    public static byte[] ShaderC(string path, ShaderKind kind)
+    {
+        using Compiler compiler = new();
+        compiler.Includer = new Includer(Path.GetDirectoryName(path)!);
+
+        using Result result = compiler.Compile(File.ReadAllText(path), path, kind);
+
+        if (result.Status != CompilationStatus.Success) throw new SpirvCompilationException("\n" + result.ErrorMessage);
+
+        byte[] spv = result.GetBytecode().ToArray();
+        if (spv.Length == 0) throw new SpirvCompilationException("Output 0 bytes!");
+
+        return spv;
+    }
+
     public static byte[] GetEmbeddedBytes(string path)
     {
         Assembly assembly = Assembly.GetExecutingAssembly();
@@ -109,30 +127,6 @@ public static class Utils
         if (ImGui.MenuItem("Palette Picker"))
         {
             GuiManager.AddWindow(new PalettePicker());
-        }
-
-        if (ImGui.MenuItem("Scene Builder"))
-        {
-            GuiManager.AddWindow(new SceneBuilder());
-        }
-
-        if (ImGui.BeginMenu("Render"))
-        {
-            ImGui.SeparatorText("TILES");
-
-            if (ImGui.MenuItem("Render Tiles"))
-            {
-                GuiManager.AddWindow(new RenderSingleTiles());
-            }
-
-            ImGui.SeparatorText("PROPS");
-
-            if (ImGui.MenuItem("Render Single Prop"))
-            {
-                GuiManager.AddWindow(new RenderProps());
-            }
-
-            ImGui.EndMenu();
         }
 
         if (ImGui.BeginMenu("Help"))

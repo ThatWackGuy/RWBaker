@@ -115,7 +115,7 @@ public class ImNotify
         if (buttonAction != null) ButtonAction = buttonAction;
     }
 
-    public void ManagerRegister(int id) => _id = $"##NOTIFY{id}";
+    public void ManagerIdFix(int id) => _id = $"##NOTIFY{id}";
 
     private ImNotifyPhase GetPhase()
     {

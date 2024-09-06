@@ -14,14 +14,13 @@ namespace RWBaker.Gui;
 
 public class GuiTexture : IDisposable
 {
-    private static readonly ConcurrentDictionary<IntPtr, GuiTexture> _mapByIdx = new();
-    private static readonly ConcurrentDictionary<string, GuiTexture> _mapByName = new();
+    private static readonly ConcurrentDictionary<IntPtr, WeakReference<GuiTexture>> _mapByIdx = new();
+    private static readonly ConcurrentDictionary<string, WeakReference<GuiTexture>> _mapByName = new();
 
     private static IntPtr _nextIndex = 1;
 
     public readonly string Name;
     public readonly IntPtr Index;
-    public int RefCounter { get; private set; }
     public readonly Vector2 Size;
     public Texture Texture { get; }
 
@@ -70,16 +69,26 @@ public class GuiTexture : IDisposable
         }
     }
 
+    ~GuiTexture()
+    {
+        Dispose();
+    }
+
     public static GuiTexture Create(string name, Texture texture, ResourceLayout? textureLayout = null)
     {
-        if (_mapByName.ContainsKey(name)) throw new DuplicateNameException($"Texture with name '{name}' already exists");
+        lock (_mapByIdx) lock (_mapByName)
+        {
+            if (_mapByName.ContainsKey(name)) throw new DuplicateNameException($"Texture with name '{name}' already exists");
 
-        GuiTexture tex = new(name, texture, textureLayout ?? GuiManager.TextureLayout, _nextIndex);
-        if (!_mapByIdx.TryAdd(_nextIndex, tex)) throw new Exception("Couldn't add texture as Id");
-        if(!_mapByName.TryAdd(name, tex)) throw new Exception("Couldn't add texture as Name");
-        _nextIndex++;
+            GuiTexture tex = new(name, texture, textureLayout ?? GuiManager.TextureLayout, _nextIndex);
+            WeakReference<GuiTexture> weakTex = new(tex);
 
-        return tex;
+            if (!_mapByIdx.TryAdd(_nextIndex, weakTex)) throw new Exception("Texture with idx already exists");
+            if(!_mapByName.TryAdd(name, weakTex)) throw new Exception("Texture with name already exists");
+            _nextIndex++;
+
+            return tex;
+        }
     }
 
     public static GuiTexture CreateFromEmbedded(string name, string path, ResourceLayout? textureLayout = null)
@@ -174,24 +183,26 @@ public class GuiTexture : IDisposable
     /// <remarks>
     /// Not recommended for general use. Please use <see cref="TryGetTexture(System.IntPtr,out RWBaker.Gui.GuiTexture)"/> or similar.
     /// </remarks>
-    public static ImmutableArray<GuiTexture> GetAllTextures()
+    public static ImmutableArray<WeakReference<GuiTexture>> GetAllTextures()
     {
-        return _mapByIdx.Values.ToImmutableArray();
+        return [.._mapByIdx.Values];
     }
 
     public static GuiTexture GetTextureSafe(IntPtr index)
     {
-        return _mapByIdx.TryGetValue(index, out GuiTexture? texture) ? texture : GuiManager.MissingTex;
+        return _mapByIdx.TryGetValue(index, out var texture) ? texture.TryGetTarget(out var tex) ? tex : GuiManager.MissingTex : GuiManager.MissingTex;
     }
 
     public static bool TryGetTexture(IntPtr index, [MaybeNullWhen(false)] out GuiTexture texture)
     {
-        return _mapByIdx.TryGetValue(index, out texture);
+        texture = null;
+        return _mapByIdx.TryGetValue(index, out var weak) && weak.TryGetTarget(out texture);
     }
 
     public static bool TryGetTexture(string name, [MaybeNullWhen(false)] out GuiTexture texture)
     {
-        return _mapByName.TryGetValue(name, out texture);
+        texture = null;
+        return _mapByName.TryGetValue(name, out var weak) && weak.TryGetTarget(out texture);
     }
 
     public static bool TextureExists(IntPtr index) => _mapByIdx.ContainsKey(index);
@@ -267,27 +278,12 @@ public class GuiTexture : IDisposable
         }
     }
 
-    public void Use() => RefCounter++;
-
-    public void Release()
-    {
-        RefCounter--;
-
-        switch (RefCounter)
-        {
-            case < 0:
-                throw new Exception("Texture Reference Counter shouldn't have -1 references");
-            case 0:
-                Dispose();
-                break;
-        }
-    }
-
     public static void DisposeAllTextures()
     {
         foreach (var texture in _mapByIdx)
         {
-            texture.Value.Dispose();
+            if (!texture.Value.TryGetTarget(out var tex)) continue;
+            tex.Dispose();
         }
 
         _mapByIdx.Clear();

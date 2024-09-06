@@ -29,7 +29,6 @@ public class Scene : IInspectable, IDisposable
 
     public Scene()
     {
-
         graphicsDevice = GuiManager.GraphicsDevice;
 
         CommandList = graphicsDevice.ResourceFactory.CreateCommandList();
@@ -61,7 +60,8 @@ public class Scene : IInspectable, IDisposable
                     }
 
                     if (!ImGui.Selectable(t.ProperName)) continue;
-                    if (!File.Exists(Path.Combine(ObjectManager.GraphicsDir, $"{t.Name}.png"))) continue;
+                    string fPath = Path.Combine(ObjectManager.GraphicsDir, $"{t.Name}.png");
+                    if (!File.Exists(fPath) || new FileInfo(fPath).Length / 8 > int.MaxValue) continue;
                     AddObject(new TileObject(this, ObjectManager, t));
                     ObjectManager.TileLastUsed = t.ProperName;
                 }
@@ -91,7 +91,8 @@ public class Scene : IInspectable, IDisposable
                     }
 
                     if (!ImGui.Selectable(p.ProperName)) continue;
-                    if (!File.Exists(Path.Combine(ObjectManager.PropsDir, $"{p.Name}.png"))) continue;
+                    string fPath = Path.Combine(ObjectManager.PropsDir, $"{p.Name}.png");
+                    if (!File.Exists(fPath) || new FileInfo(fPath).Length / 8 > int.MaxValue) continue;
                    AddObject(p.AsObject(this, ObjectManager));
                    ObjectManager.PropLastUsed = p.ProperName;
                 }

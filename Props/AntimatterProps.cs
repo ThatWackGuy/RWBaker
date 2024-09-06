@@ -16,6 +16,10 @@ public class AntimatterProp : Prop
     // use < -1 depth for "remove" depth?
     // new texture for "remove" depth?
 
+    private static Shader[]? shaders;
+    private static ResourceLayout? textureLayout;
+    private static ResourceLayout[]? layouts;
+
     private readonly PropTag _tags;
 
     private readonly string[] _notes;
@@ -93,35 +97,56 @@ public class AntimatterProp : Prop
         }
     }
 
-    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
-        Name,
-        ProperName,
-        CompleteRenderDescription,
-        GetTexPos,
-        _size * 20,
-        _repeatLayers,
-        1,
-        scene,
-        objectManager
-    );
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager)
+    {
+        if (shaders == null)
+        {
+            shaders = RWUtils.FetchVertFragFromFile("./shaders/antimatterprop");
 
-    private RenderDescription CompleteRenderDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture) => new(
-        mesh, position, rotation,
-        GuiManager.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.AntimatterPropTextureLayout,
-                texture
-            )
-        ),
-        new RWAntimatterPropRenderUniform(
-            instance,
-            _contourExponent,
-            _size
-        ),
-        true, false, false,
-        RWUtils.AntimatterPropLayouts, RWUtils.AntimatterPropShaders,
-        [], []
-    );
+            textureLayout = GuiManager.ResourceFactory.CreateResourceLayout(new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+                )
+            );
+            layouts = [ RWUtils.RWObjectDataLayout, textureLayout ];
+        }
 
-    private Vector2 GetTexPos(int var, int layer) => Vector2.UnitY;
+        return new PropObject(
+            Name,
+            ProperName,
+            CompleteRenderDescription,
+            GetTexPos,
+            _size * 20,
+            _repeatLayers,
+            1,
+            false,
+            scene,
+            objectManager
+        );
+    }
+
+    private RenderDescription CompleteRenderDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture)
+    {
+        return new RenderDescription(
+            mesh, position, rotation,
+            GuiManager.ResourceFactory.CreateResourceSet(
+                new ResourceSetDescription(
+                    textureLayout!,
+                    texture
+                )
+            ),
+            new RWAntimatterPropRenderUniform(
+                instance,
+                _contourExponent,
+                _size
+            ),
+            true, false, false,
+            layouts!, shaders!,
+            [], []
+        );
+    }
+
+    private Vector2 GetTexPos(int var, int layer)
+    {
+        return Vector2.UnitY;
+    }
 }

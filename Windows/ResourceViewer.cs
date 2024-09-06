@@ -1,3 +1,4 @@
+using System;
 using ImGuiNET;
 using RWBaker.Gui;
 
@@ -11,13 +12,17 @@ public class ResourceViewer() : Window("Resources", "_DebugResources")
 
         ImGui.TreePush("_textures");
 
-        foreach (GuiTexture texture in GuiTexture.GetAllTextures())
+        foreach (WeakReference<GuiTexture> texture in GuiTexture.GetAllTextures())
         {
-            if (ImGui.TreeNode($"[{texture.Index}] {texture.Name}"))
+            if (!texture.TryGetTarget(out var tex))
             {
-                ImGui.Image(texture.Index, texture.Size);
+                ImGui.Text("Texture is null");
+                continue;
+            }
 
-                ImGui.TextDisabled($"Size: {texture.Size}\nRefCounter: {texture.RefCounter}");
+            if (ImGui.TreeNode($"[{tex.Index}] {tex.Name}"))
+            {
+                ImGui.Image(tex.Index, tex.Size);
 
                 ImGui.TreePop();
             }

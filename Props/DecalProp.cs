@@ -12,6 +12,10 @@ namespace RWBaker.Props;
 
 public class DecalProp : Prop
 {
+    private static Shader[]? shaders;
+    private static ResourceLayout? textureLayout;
+    private static ResourceLayout[]? layouts;
+
     private readonly PropTag _tags;
 
     private readonly int _variations;
@@ -147,23 +151,38 @@ public class DecalProp : Prop
         }
     }
 
-    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
-        Name,
-        ProperName,
-        CompleteRenderDescription,
-        GetTexPos,
-        _size,
-        _repeatLayers,
-        _variations,
-        scene,
-        objectManager
-    );
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager)
+    {
+        if (shaders == null)
+        {
+            shaders = RWUtils.FetchVertFragFromFile("./shaders/decalprop");
+            textureLayout = GuiManager.ResourceFactory.CreateResourceLayout(new ResourceLayoutDescription(
+                    new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
+                    new ResourceLayoutElementDescription("RemoveTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+                )
+            );
+            layouts = [ RWUtils.RWObjectDataLayout, textureLayout ];
+        }
+
+        return new PropObject(
+            Name,
+            ProperName,
+            CompleteRenderDescription,
+            GetTexPos,
+            _size,
+            _repeatLayers,
+            _variations,
+            false,
+            scene,
+            objectManager
+        );
+    }
 
     private RenderDescription CompleteRenderDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture) => new(
         mesh, position, rotation,
         GuiManager.ResourceFactory.CreateResourceSet(
             new ResourceSetDescription(
-                RWUtils.DecalPropTextureLayout,
+                textureLayout!,
                 texture,
                 camera.RemovalPass.RenderTexture.Texture
             )
@@ -173,7 +192,7 @@ public class DecalProp : Prop
             _size
         ),
         false, false, true,
-        RWUtils.DecalPropLayouts, RWUtils.DecalPropShaders,
+        layouts!, shaders!,
         [], []
     );
 

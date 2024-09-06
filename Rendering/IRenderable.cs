@@ -4,6 +4,4 @@ namespace RWBaker.Rendering;
 public interface IRenderable
 {
     public RenderDescription GetRenderDescription(Camera camera);
-
-    public Vector2Int GetRenderSize(Camera camera);
 }

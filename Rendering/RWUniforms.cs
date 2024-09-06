@@ -61,16 +61,14 @@ public struct LightingUniform
 [StructLayout(LayoutKind.Sequential)]
 public struct PaletteUniform
 {
-    public readonly Vector2 EffectColorsTexSize;
     public readonly uint EffectA;
     public readonly uint EffectB;
 
     public PaletteUniform(PaletteManager paletteManager)
     {
-        EffectColorsTexSize = paletteManager.EffectColors.Size; // 8
         EffectA = (uint)paletteManager.EffectColorA; // 4
         EffectB = (uint)paletteManager.EffectColorB; // 4
-        // 16 bytes total
+        // 8 bytes total
     }
 }
 #endregion
@@ -80,7 +78,6 @@ public struct RWTileRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
-    public readonly Vector2 RenderableTexSize;
 
     public readonly Vector2 TileSize;
     public readonly int BufferTiles;
@@ -91,8 +88,7 @@ public struct RWTileRenderUniform
     {
         StartingLayer = tile.Position.Z * 10; // 4
         LayerCount = tile.LayerCount; // 4
-        RenderableTexSize = tile.CachedTexture.Size; // 8
-        // 16 bytes
+        // 8 bytes
 
         TileSize = tile.OriginalSize;
         BufferTiles = tile.BufferTiles;
@@ -106,7 +102,6 @@ public struct RWStandardPropRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
-    public readonly Vector2 TexSize;
 
     public readonly Vector2 PixelSize;
     public readonly int Vars;
@@ -117,8 +112,7 @@ public struct RWStandardPropRenderUniform
     {
         StartingLayer = prop.Position.Z; // 4
         LayerCount = prop.LayerCount; // 4
-        TexSize = prop.CachedTexture.Size; // 8
-        // 16 bytes
+        // 8 bytes
 
         PixelSize = size; // 8
         Vars = variants; // 4
@@ -133,7 +127,6 @@ public struct RWSoftPropRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
-    public readonly Vector2 TexSize;
 
     public readonly Vector2 PixelSize;
     public readonly int Vars;
@@ -149,8 +142,7 @@ public struct RWSoftPropRenderUniform
     {
         StartingLayer = prop.Position.Z; // 4
         LayerCount = prop.LayerCount; // 4
-        TexSize = prop.CachedTexture.Size; // 8
-        // 16 bytes
+        // 8 bytes
 
         PixelSize = size; // 8
         Vars = variants; // 4
@@ -169,7 +161,6 @@ public struct RWAntimatterPropRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
-    public readonly Vector2 TexSize;
 
     public readonly Vector2 PixelSize;
     public readonly float ContourExponent;
@@ -178,8 +169,7 @@ public struct RWAntimatterPropRenderUniform
     {
         StartingLayer = prop.Position.Z; // 4
         LayerCount = prop.LayerCount; // 4
-        TexSize = prop.CachedTexture.Size; // 8
-        // 16 bytes
+        // 8 bytes
 
         PixelSize = size;
         ContourExponent = contourExponent;
@@ -191,7 +181,6 @@ public struct RWDecalPropRenderUniform
 {
     public readonly float StartingLayer;
     public readonly float LayerCount;
-    public readonly Vector2 TexSize;
 
     public readonly Vector2 PixelSize;
 
@@ -199,8 +188,7 @@ public struct RWDecalPropRenderUniform
     {
         StartingLayer = prop.Position.Z; // 4
         LayerCount = prop.LayerCount; // 4
-        TexSize = prop.CachedTexture.Size; // 8
-        // 16 bytes
+        // 8 bytes
 
         PixelSize = size;
     }

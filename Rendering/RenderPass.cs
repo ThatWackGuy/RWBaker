@@ -6,8 +6,6 @@ namespace RWBaker.Rendering;
 
 public class RenderPass : IDisposable
 {
-    public readonly string Id;
-
     public readonly GuiTexture RenderTexture;
     public readonly Texture DepthTexture;
 
@@ -19,8 +17,6 @@ public class RenderPass : IDisposable
 
     public RenderPass(ResourceFactory factory, string id, BlendStateDescription blendState, uint width = 1, uint height = 1, FaceCullMode faceCullMode = FaceCullMode.Back)
     {
-        Id = id;
-
         Texture renderTarget = factory.CreateTexture(
             new TextureDescription(
                 width,
@@ -67,5 +63,7 @@ public class RenderPass : IDisposable
         DepthTexture.Dispose();
 
         Framebuffer.Dispose();
+
+        GC.SuppressFinalize(this);
     }
 }

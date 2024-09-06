@@ -91,7 +91,7 @@ public class PalettePicker : Window
         {
             if (palettes.CurrentPalette.Name != $"{palettes.PaletteA.Name} {palettes.PaletteBlend} {palettes.PaletteB.Name}")
             {
-                if (palettes.CurrentPalette.isMixed) palettes.CurrentPalette.Release();
+                if (palettes.CurrentPalette.isMixed) palettes.CurrentPalette.Dispose();
                 palettes.CurrentPalette = Palette.MixPalettes(palettes.PaletteA, palettes.PaletteB, palettes.PaletteBlend);
             }
         }

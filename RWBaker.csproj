@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <TargetFramework>net70</TargetFramework>
+        <TargetFramework>net80</TargetFramework>
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>false</ImplicitUsings>
         <Nullable>enable</Nullable>
@@ -15,33 +15,28 @@
     <ItemGroup>
         <PackageReference Include="ImGui.NET" Version="1.90.8.1" />
         <PackageReference Include="Microsoft.NET.ILLink.Analyzers" Version="7.0.100-1.23401.1" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
         <PackageReference Include="Veldrid" Version="4.9.0" />
         <PackageReference Include="Veldrid.ImageSharp" Version="4.9.0" />
         <PackageReference Include="Veldrid.SDL2" Version="4.9.0" />
         <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
         <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
+        <PackageReference Include="Vortice.ShaderCompiler" Version="1.7.3" />
     </ItemGroup>
 
     <ItemGroup>
-        <EmbeddedResource Include="res\shaders\*.*" />
-        <EmbeddedResource Include="res\bakertex.png" />
-        <EmbeddedResource Include="res\missingtex.png" />
-        <EmbeddedResource Include="res\palette0.png" />
-        <EmbeddedResource Include="res\effectcolors.png" />
+        <EmbeddedResource Include="res\*.spv" />
+        <EmbeddedResource Include="res\*.png" />
         <EmbeddedResource Include="res\*.ttf" />
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="cimgui.dll">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="cimgui.dylib">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="cimgui.so">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
+        <None Update="cimgui.*"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </None>
+        <None Update="shaders/*.*"> <CopyToOutputDirectory>Always</CopyToOutputDirectory> </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Materials\" />
     </ItemGroup>
 
 </Project>

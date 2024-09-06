@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
-using RWBaker.Gui;
 using RWBaker.Rendering;
 using SixLabors.ImageSharp;
 using Veldrid;
@@ -12,6 +11,8 @@ namespace RWBaker.Props;
 
 public class SoftProp : Prop
 {
+    private static Shader[]? shaders;
+
     private readonly PropTag _tags;
 
     private readonly int _variations;
@@ -223,30 +224,27 @@ public class SoftProp : Prop
         }
     }
 
-    public override PropObject AsObject(Scene scene, RWObjectManager objectManager) => new(
-        Name,
-        ProperName,
-        CompleteRenderDescription,
-        GetTexPos,
-        _size,
-        _repeatLayers,
-        _variations,
-        scene,
-        objectManager
-    );
+    public override PropObject AsObject(Scene scene, RWObjectManager objectManager)
+    {
+        shaders ??= RWUtils.FetchVertFragFromFile("./shaders/softprop");
+
+        return new PropObject(
+            Name,
+            ProperName,
+            CompleteRenderDescription,
+            GetTexPos,
+            _size,
+            _repeatLayers,
+            _variations,
+            false,
+            scene,
+            objectManager
+        );
+    }
 
     private RenderDescription CompleteRenderDescription(Mesh mesh, Vector3 position, Matrix4x4 rotation, PropObject instance, Camera camera, Texture texture) => new(
         mesh, position, rotation,
-        GuiManager.ResourceFactory.CreateResourceSet(
-            new ResourceSetDescription(
-                RWUtils.RWObjectTextureLayout,
-                texture,
-                camera.Scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
-                camera.Scene.PaletteManager.EffectColors.Texture,
-                camera.LightingPass.DepthTexture,
-                camera.RemovalPass.RenderTexture.Texture
-            )
-        ),
+        RWUtils.StandardTextureSet(texture, camera),
         new RWSoftPropRenderUniform(
             instance,
             _size,
@@ -260,7 +258,7 @@ public class SoftProp : Prop
             _highlightExponent
         ),
         false, true, true,
-        RWUtils.RWResourceLayout, RWUtils.SoftPropShaders,
+        RWUtils.RWResourceLayout, shaders!,
         [], []
     );
 

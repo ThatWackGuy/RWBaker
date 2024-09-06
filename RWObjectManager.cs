@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using RWBaker.Gui;
 using RWBaker.Props;
 using RWBaker.Tiles;
 
@@ -100,6 +101,7 @@ public class RWObjectManager
         }
 
         TilesChanged();
+        GuiManager.PushNotification(new ImNotify(ImNotifyType.Success, $"Loaded {Tiles.Count} tiles", "", 5000));
     }
 
     public void GetProps(string path)
@@ -174,5 +176,6 @@ public class RWObjectManager
         }
 
         PropsChanged();
+        GuiManager.PushNotification(new ImNotify(ImNotifyType.Success, $"Loaded {Props.Count} props", "", 5000));
     }
 }

@@ -19,6 +19,7 @@ namespace RWBaker.Gui;
 
 public static class GuiManager
 {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     public static GraphicsDevice GraphicsDevice { get; private set; }
     public static ResourceFactory ResourceFactory  { get; private set; }
 
@@ -49,6 +50,7 @@ public static class GuiManager
     private static Pipeline pipeline;
 
     private static ResourceSet mainResourceSet;
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
     public static int WindowWidth { get; private set; }
     public static int WindowHeight { get; private set; }
@@ -74,6 +76,7 @@ public static class GuiManager
     private static readonly List<Window> windowsToAdd = new();
 
     private static readonly List<ImNotify> notifications = new();
+    private static readonly List<ImNotify> notificationsToAdd = new();
     private static readonly List<ImNotify> notificationsToRemove = new();
 
     public static void Load(UserData userData)
@@ -177,6 +180,15 @@ public static class GuiManager
 
             ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport(), ImGuiDockNodeFlags.PassthruCentralNode);
 
+            try
+            {
+                Program.SceneBuilder.Draw();
+            }
+            catch (Exception e)
+            {
+                Exception(e);
+            }
+
             if (windowsToAdd.Count > 0)
             {
                 // Add pending windows
@@ -216,11 +228,21 @@ public static class GuiManager
                 }
             }
 
+            if (notificationsToAdd.Count > 0)
+            {
+                // Add pending windows
+                foreach (ImNotify notify in notificationsToAdd)
+                {
+                    notifications.Add(notify);
+                }
+
+                notificationsToAdd.Clear();
+            }
+
             // Render active notifications
             Vector2 viewportSize = ImGui.GetMainViewport().Size;
 
             float height = 0f;
-
             foreach (ImNotify notify in notifications)
             {
                 notify.Render(viewportSize, ref height);
@@ -257,8 +279,8 @@ public static class GuiManager
 
         projMatrixBuffer = ResourceFactory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
 
-        ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.vertex.spv"), "main");
-        ShaderDescription guiFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.fragment.spv"), "main");
+        ShaderDescription guiVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.vertex.spv"), "main");
+        ShaderDescription guiFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.fragment.spv"), "main");
         mainShaders = ResourceFactory.CreateFromSpirv(guiVert, guiFrag);
 
         VertexLayoutDescription[] vertexLayouts =
@@ -304,7 +326,7 @@ public static class GuiManager
 
     private static void RecreateFonts()
     {
-        fontTex?.Release();
+        fontTex?.Dispose();
 
         ImGuiIOPtr io = ImGui.GetIO();
 
@@ -342,7 +364,6 @@ public static class GuiManager
         );
 
         fontTex = GuiTexture.Create("_defaultFont", texture);
-        fontTex.Use();
 
         io.Fonts.SetTexID(fontTex.Index);
         io.Fonts.ClearTexData();
@@ -399,7 +420,7 @@ public static class GuiManager
 
     public static Texture TextureFromImage(string imagePath)
     {
-        Image<Rgba32> image = Image.Load<Rgba32>(imagePath);
+        using Image<Rgba32> image = Image.Load<Rgba32>(imagePath);
 
         Texture texture = ResourceFactory.CreateTexture(
             new TextureDescription(
@@ -433,15 +454,15 @@ public static class GuiManager
         windowsToDelete.Add(window);
     }
 
-    public static void Exception(Exception e)
+    public static void Exception(Exception e, string name = "AN EXCEPTION WAS THROWN", Action<ExceptionWindow>? destroyCallback = null)
     {
-        AddWindow(new ExceptionWindow(e));
+        AddWindow(new ExceptionWindow(e, name, destroyCallback));
     }
 
     public static void PushNotification(ImNotify notify)
     {
-        notify.ManagerRegister(notifications.Count);
-        notifications.Add(notify);
+        notify.ManagerIdFix(notifications.Count);
+        notificationsToAdd.Add(notify);
     }
 
     public static void RemoveNotification(ImNotify notify)

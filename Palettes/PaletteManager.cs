@@ -124,14 +124,14 @@ public class PaletteManager : IDisposable
     {
         foreach (Palette palette in Palettes)
         {
-            palette.Release();
+            palette.Dispose();
         }
 
         Palettes.Clear();
 
-        if (EffectColors != _defaultEffectColors) EffectColors?.Release();
+        if (EffectColors != _defaultEffectColors) EffectColors?.Dispose();
 
-        if (_currentPalette != _defaultPalette) _currentPalette.Release();
+        if (_currentPalette != _defaultPalette) _currentPalette.Dispose();
 
         if (path != "")
         {
@@ -178,18 +178,19 @@ public class PaletteManager : IDisposable
         _lastB = PaletteB.Name;
 
         PalettesChanged();
+        GuiManager.PushNotification(new ImNotify(ImNotifyType.Success, $"Loaded {Palettes.Count} palettes", "", 5000));
     }
 
     public void Dispose()
     {
         foreach (Palette palette in Palettes)
         {
-            palette.Release();
+            palette.Dispose();
         }
 
         Palettes.Clear();
 
-        _defaultPalette.Release();
+        _defaultPalette.Dispose();
 
         _defaultEffectColors.Dispose();
         EffectColors?.Dispose();

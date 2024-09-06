@@ -5,6 +5,9 @@ using System.Numerics;
 using ImGuiNET;
 using RWBaker.Gui;
 using RWBaker.Rendering;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using Veldrid;
 
 namespace RWBaker.Props;
@@ -37,40 +40,13 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
 
     public readonly Mesh Mesh;
 
-    /// <summary>Creates an empty prop object</summary>
-    /// <remarks>Only use for lack of prop data!</remarks>
-    /// <exception cref="Exception">throws if used for rendering</exception>
-    public PropObject() : base(null!, "")
-    {
-        Name = "";
-
-        _completeDesc = (_, _, _, _, _, _) => throw new Exception();
-        _texPosCalculator = (_, _) => throw new Exception();
-
-        RenderRepeatLayers = new[] { 1 };
-        LayerCount = 1;
-
-        Size = Vector3.One;
-
-        Variants = 1;
-
-        Depth = 1;
-
-        CachedTexture = GuiManager.MissingTex;
-
-        Mesh = new Mesh();
-    }
-
-    public PropObject(string name, string properName, CompleteDescription completeDescription, TexPosCalculator texPosCalculator, Vector2 size, int[] repeatLayers, int variants, Scene scene, RWObjectManager manager) : base(scene, properName)
+    public PropObject(string name, string properName, CompleteDescription completeDescription, TexPosCalculator texPosCalculator, Vector2 size, int[] repeatLayers, int variants, bool layered, Scene scene, RWObjectManager manager) : base(scene, properName)
     {
         Name = name;
 
         string texturePath = Path.Combine(manager.PropsDir, $"{Name}.png");
 
-        if (!File.Exists(texturePath))
-        {
-            throw new FileNotFoundException("Please check the names or if the file has been deleted!");
-        }
+        if (!File.Exists(texturePath)) throw new FileNotFoundException("Please check the names or if the file has been deleted!");
 
         _completeDesc = completeDescription;
         _texPosCalculator = texPosCalculator;
@@ -102,7 +78,7 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
         }
 
         LayerCount = RenderRepeatLayers.Sum();
-        Depth = RenderRepeatLayers.Sum();
+        Depth = LayerCount;
 
         Variants = variants;
 
@@ -112,9 +88,16 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
 
         if (!GuiTexture.TryGetTexture($"_prop{OriginalName}", out CachedTexture!))
         {
-            CachedTexture = GuiTexture.Create($"_prop{OriginalName}", GuiManager.TextureFromImage(texturePath));
+            using Image<Rgba32> image = Image.Load<Rgba32>(texturePath);
+
+            image.Mutate(ctx =>
+            {
+                if (layered) ctx.FixFutileTexture((int)Size.X * Variants, (int)Size.Y * RenderRepeatLayers.Length);
+                ctx.ReadyFutileTexture(true);
+            });
+
+            CachedTexture = GuiTexture.Create($"_prop{OriginalName}", GuiManager.TextureFromImage(image));
         }
-        CachedTexture.Use();
 
         Mesh = new();
         BuildLayerMesh();
@@ -207,8 +190,6 @@ public class PropObject : SceneObject, IRenderable, IInspectable, ISceneEditable
 
         Mesh.AllocatedMergeOver();
     }
-
-    public Vector2Int GetRenderSize(Camera camera) => new Vector2Int((int)Size.X, (int)Size.Y) + (LayerCount - 1) * Vector2.One; // TODO: FIX
 
     public void Dispose()
     {

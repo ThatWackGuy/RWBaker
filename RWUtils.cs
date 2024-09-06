@@ -1,7 +1,9 @@
 using System;
 using RWBaker.Gui;
+using RWBaker.Rendering;
 using Veldrid;
 using Veldrid.SPIRV;
+using Vortice.ShaderCompiler;
 
 namespace RWBaker;
 
@@ -14,18 +16,6 @@ public static class RWUtils
 
     public static ResourceLayout RWObjectDataLayout;
     public static ResourceLayout RWObjectTextureLayout;
-
-    public static Shader[] TileShaders;
-
-    public static Shader[] StandardPropShaders;
-    public static Shader[] SoftPropShaders;
-    public static Shader[] DecalPropShaders;
-    public static ResourceLayout DecalPropTextureLayout;
-    public static ResourceLayout[] DecalPropLayouts;
-
-    public static Shader[] AntimatterPropShaders;
-    public static ResourceLayout AntimatterPropTextureLayout;
-    public static ResourceLayout[] AntimatterPropLayouts;
 
     #pragma warning restore CS8618
 
@@ -78,41 +68,28 @@ public static class RWUtils
         );
 
         RWResourceLayout = [ RWObjectDataLayout, RWObjectTextureLayout ];
+    }
 
-        // TILES
-        ShaderDescription tileVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.tile.vert"), "main");
-        ShaderDescription tileFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.tile.frag"), "main");
-        TileShaders = factory.CreateFromSpirv(tileVert, tileFrag);
-
-        // PROPS
-        ShaderDescription standardVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.standardprop.vert"), "main");
-        ShaderDescription standardFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.standardprop.frag"), "main");
-        StandardPropShaders = factory.CreateFromSpirv(standardVert, standardFrag);
-
-        ShaderDescription softVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.softprop.vert"), "main");
-        ShaderDescription softFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.softprop.frag"), "main");
-        SoftPropShaders = factory.CreateFromSpirv(softVert, softFrag);
-
-        ShaderDescription decalVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.decalprop.vert"), "main");
-        ShaderDescription decalFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.decalprop.frag"), "main");
-        DecalPropShaders = factory.CreateFromSpirv(decalVert, decalFrag);
-
-        DecalPropTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("RemoveTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
+    public static ResourceSet StandardTextureSet(Texture mainTex, Camera camera)
+    {
+        return GuiManager.ResourceFactory.CreateResourceSet(
+            new ResourceSetDescription(
+                RWObjectTextureLayout,
+                mainTex,
+                camera.Scene.PaletteManager.CurrentPalette.DisplayTex.Texture,
+                camera.Scene.PaletteManager.EffectColors.Texture,
+                camera.LightingPass.DepthTexture,
+                camera.RemovalPass.RenderTexture.Texture
             )
         );
-        DecalPropLayouts = [ RWObjectDataLayout, DecalPropTextureLayout ];
+    }
 
-        ShaderDescription antimatterVert = new(ShaderStages.Vertex, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.vert"), "main");
-        ShaderDescription antimatterFrag = new(ShaderStages.Fragment, Utils.GetEmbeddedBytes("res.shaders.antimatterprop.frag"), "main");
-        AntimatterPropShaders = factory.CreateFromSpirv(antimatterVert, antimatterFrag);
+    public static Shader[] FetchVertFragFromFile(string filepath)
+    {
+        ShaderDescription vert = new(ShaderStages.Vertex, Utils.ShaderC($"{filepath}.vert", ShaderKind.VertexShader), "main");
+        ShaderDescription frag = new(ShaderStages.Fragment, Utils.ShaderC($"{filepath}.frag", ShaderKind.FragmentShader), "main");
 
-        AntimatterPropTextureLayout = factory.CreateResourceLayout(new ResourceLayoutDescription(
-                new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)
-            )
-        );
-        AntimatterPropLayouts = [ RWObjectDataLayout, AntimatterPropTextureLayout ];
+        return GuiManager.ResourceFactory.CreateFromSpirv(vert, frag);
     }
 
     public static bool LingoBool(string line, out bool value)
